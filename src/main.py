@@ -43,3 +43,13 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 @app.get("/")
 async def root():
     return {"message": f"Welcome to {settings.APP_NAME}"}
+
+
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "service": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "timestamp": "2025-07-02T13:30:00Z"
+    }
