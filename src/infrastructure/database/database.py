@@ -7,6 +7,7 @@ engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
     future=True,
+    pool_pre_ping=True,
 )
 
 async_session_maker = async_sessionmaker(
@@ -18,6 +19,6 @@ async_session_maker = async_sessionmaker(
 Base = declarative_base()
 
 
-async def get_session() -> AsyncSession:
+async def get_session():
     async with async_session_maker() as session:
         yield session

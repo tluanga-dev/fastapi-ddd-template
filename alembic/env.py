@@ -12,6 +12,7 @@ sys.path.append(str(Path(__file__).resolve().parent.parent))
 from src.core.config import settings
 from src.infrastructure.database import Base
 from src.infrastructure.models import *
+from src.infrastructure.models.base import UUID
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

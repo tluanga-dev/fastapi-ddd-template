@@ -2,10 +2,11 @@ import asyncio
 import pytest
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from httpx import AsyncClient, ASGITransport
 
 from src.infrastructure.database import Base
 from src.infrastructure.models import *
-from src.api.v1.dependencies.database import get_db
+from src.api.v1.dependencies import get_db
 from src.main import app
 
 # Test database URL
@@ -37,18 +38,23 @@ def event_loop():
 @pytest.fixture(scope="function")
 async def db_session() -> AsyncGenerator[AsyncSession, None]:
     """Create a new database session for a test."""
+    # Create tables
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     
-    async with TestingSessionLocal() as session:
+    # Create a session that persists throughout the test
+    session = TestingSessionLocal()
+    try:
         yield session
-    
-    async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+    finally:
+        await session.close()
+        # Drop tables
+        async with test_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
 
 
 @pytest.fixture(scope="function")
-def override_get_db(db_session: AsyncSession):
+async def override_get_db(db_session: AsyncSession):
     """Override the get_db dependency with the test database session."""
     async def _override_get_db():
         yield db_session
@@ -56,3 +62,11 @@ def override_get_db(db_session: AsyncSession):
     app.dependency_overrides[get_db] = _override_get_db
     yield
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope="function")
+async def async_client(override_get_db) -> AsyncGenerator[AsyncClient, None]:
+    """Create an async client for testing."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
