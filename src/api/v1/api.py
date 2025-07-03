@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from src.api.v1.endpoints.simple_auth import router as auth_router
 from src.api.v1.endpoints.users import router as users_router
 from src.api.v1.endpoints.locations import router as locations_router
 from src.api.v1.endpoints.categories import router as categories_router
@@ -14,6 +15,7 @@ from src.api.v1.endpoints.rental_transaction import router as rental_transaction
 
 api_router = APIRouter()
 
+api_router.include_router(auth_router, prefix="/auth", tags=["authentication"])
 api_router.include_router(users_router, prefix="/users", tags=["users"])
 api_router.include_router(locations_router, prefix="/locations", tags=["locations"])
 api_router.include_router(categories_router, prefix="/categories", tags=["categories"])
