@@ -8,7 +8,7 @@ from .base import BaseModel, UUID
 from ..database import Base
 
 
-class SKUModel(Base, BaseModel):
+class SKUModel(BaseModel):
     """SQLAlchemy model for SKU."""
     
     __tablename__ = "skus"

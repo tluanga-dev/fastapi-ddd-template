@@ -7,7 +7,7 @@ from .base import BaseModel, UUID
 from ...domain.entities.location import Location, LocationType
 
 
-class LocationModel(Base, BaseModel):
+class LocationModel(BaseModel):
     """SQLAlchemy model for Location entity."""
     
     __tablename__ = "locations"

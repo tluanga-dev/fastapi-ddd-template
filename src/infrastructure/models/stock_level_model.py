@@ -7,7 +7,7 @@ from .base import BaseModel, UUID
 from ..database import Base
 
 
-class StockLevelModel(Base, BaseModel):
+class StockLevelModel(BaseModel):
     """SQLAlchemy model for Stock Level."""
     
     __tablename__ = "stock_levels"

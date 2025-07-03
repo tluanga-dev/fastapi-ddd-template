@@ -10,7 +10,7 @@ from ...domain.value_objects.transaction_type import (
 )
 
 
-class TransactionHeaderModel(Base, BaseModel):
+class TransactionHeaderModel(BaseModel):
     """SQLAlchemy model for TransactionHeader entity."""
     
     __tablename__ = "transaction_headers"

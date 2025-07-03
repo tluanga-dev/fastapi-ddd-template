@@ -8,7 +8,7 @@ from .base import BaseModel, UUID
 from ..database import Base
 
 
-class ItemMasterModel(Base, BaseModel):
+class ItemMasterModel(BaseModel):
     """SQLAlchemy model for Item Master."""
     
     __tablename__ = "item_masters"

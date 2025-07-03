@@ -6,7 +6,7 @@ from .base import BaseModel
 from ...domain.entities.brand import Brand
 
 
-class BrandModel(Base, BaseModel):
+class BrandModel(BaseModel):
     """SQLAlchemy model for Brand entity."""
     
     __tablename__ = "brands"

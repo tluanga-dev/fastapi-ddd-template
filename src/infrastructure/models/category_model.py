@@ -6,7 +6,7 @@ from .base import BaseModel, UUID
 from ...domain.entities.category import Category
 
 
-class CategoryModel(Base, BaseModel):
+class CategoryModel(BaseModel):
     """SQLAlchemy model for Category entity."""
     
     __tablename__ = "categories"

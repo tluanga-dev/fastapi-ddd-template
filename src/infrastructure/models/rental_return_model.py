@@ -43,25 +43,25 @@ class RentalReturnModel(BaseModel):
     total_refund_amount = Column(Numeric(10, 2), nullable=False, default=0.00)
     
     # Relationships
-    rental_transaction = relationship(
-        "TransactionHeaderModel",
-        back_populates="rental_returns",
-        foreign_keys=[rental_transaction_id]
-    )
+    # rental_transaction = relationship(
+    #     "TransactionHeaderModel",
+    #     back_populates="rental_returns",
+    #     foreign_keys=[rental_transaction_id]
+    # )
     return_location = relationship(
         "LocationModel",
         foreign_keys=[return_location_id]
     )
-    lines = relationship(
-        "RentalReturnLineModel",
-        back_populates="rental_return",
-        cascade="all, delete-orphan"
-    )
-    inspection_reports = relationship(
-        "InspectionReportModel",
-        back_populates="rental_return",
-        cascade="all, delete-orphan"
-    )
+    # lines = relationship(
+    #     "RentalReturnLineModel",
+    #     back_populates="rental_return", 
+    #     cascade="all, delete-orphan"
+    # )
+    # inspection_reports = relationship(
+    #     "InspectionReportModel",
+    #     back_populates="rental_return",
+    #     cascade="all, delete-orphan"
+    # )
     
     @classmethod
     def from_entity(cls, entity: RentalReturn) -> "RentalReturnModel":

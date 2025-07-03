@@ -50,11 +50,11 @@ class InspectionReportModel(BaseModel):
     approved_at = Column(DateTime, nullable=True)
     
     # Relationships
-    rental_return = relationship(
-        "RentalReturnModel",
-        back_populates="inspection_reports",
-        foreign_keys=[return_id]
-    )
+    # rental_return = relationship(
+    #     "RentalReturnModel",
+    #     back_populates="inspection_reports", 
+    #     foreign_keys=[return_id]
+    # )
     inventory_unit = relationship(
         "InventoryUnitModel",
         foreign_keys=[inventory_unit_id]

@@ -6,6 +6,9 @@ from src.core.config import settings
 from src.api.v1.api import api_router
 from src.infrastructure.database import engine, Base
 
+# Import models to ensure they are registered with SQLAlchemy
+from src.infrastructure.models import *  # noqa
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

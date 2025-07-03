@@ -8,7 +8,7 @@ from ...domain.entities.customer import Customer
 from ...domain.value_objects.customer_type import CustomerType, CustomerTier, BlacklistStatus
 
 
-class CustomerModel(Base, BaseModel):
+class CustomerModel(BaseModel):
     """SQLAlchemy model for Customer entity."""
     
     __tablename__ = "customers"

@@ -7,7 +7,7 @@ from ...domain.entities.customer_address import CustomerAddress
 from ...domain.value_objects.customer_type import AddressType
 
 
-class CustomerAddressModel(Base, BaseModel):
+class CustomerAddressModel(BaseModel):
     """SQLAlchemy model for CustomerAddress entity."""
     
     __tablename__ = "customer_addresses"

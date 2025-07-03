@@ -3,6 +3,7 @@ from uuid import uuid4
 from sqlalchemy import Column, DateTime, Boolean, String
 from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
 import sqlalchemy as sa
+from ..database import Base
 
 
 # Create a UUID type that works with both PostgreSQL and SQLite
@@ -39,7 +40,9 @@ class UUID(sa.TypeDecorator):
                 return value
 
 
-class BaseModel:
+class BaseModel(Base):
+    __abstract__ = True
+    
     id = Column(UUID(), primary_key=True, default=uuid4)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

@@ -7,7 +7,7 @@ from ...domain.entities.customer_contact_method import CustomerContactMethod
 from ...domain.value_objects.customer_type import ContactType
 
 
-class CustomerContactMethodModel(Base, BaseModel):
+class CustomerContactMethodModel(BaseModel):
     """SQLAlchemy model for CustomerContactMethod entity."""
     
     __tablename__ = "customer_contact_methods"

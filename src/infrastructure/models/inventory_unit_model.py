@@ -10,7 +10,7 @@ from .base import BaseModel, UUID
 from ..database import Base
 
 
-class InventoryUnitModel(Base, BaseModel):
+class InventoryUnitModel(BaseModel):
     """SQLAlchemy model for Inventory Unit."""
     
     __tablename__ = "inventory_units"

@@ -16,7 +16,7 @@ role_permission_association = Table(
 )
 
 
-class PermissionModel(Base, BaseModel):
+class PermissionModel(BaseModel):
     __tablename__ = "permissions"
 
     code = Column(String, unique=True, nullable=False, index=True)
@@ -24,7 +24,7 @@ class PermissionModel(Base, BaseModel):
     description = Column(String)
 
 
-class RoleModel(Base, BaseModel):
+class RoleModel(BaseModel):
     __tablename__ = "roles"
 
     name = Column(String, unique=True, nullable=False, index=True)
@@ -42,7 +42,7 @@ class RoleModel(Base, BaseModel):
 
 
 # Update the existing user model to include role relationship
-class UserModel(Base, BaseModel):
+class UserModel(BaseModel):
     __tablename__ = "users"
 
     email = Column(String, unique=True, nullable=False, index=True)

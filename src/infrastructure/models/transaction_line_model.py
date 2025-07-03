@@ -7,7 +7,7 @@ from ...domain.entities.transaction_line import TransactionLine
 from ...domain.value_objects.transaction_type import LineItemType, RentalPeriodUnit
 
 
-class TransactionLineModel(Base, BaseModel):
+class TransactionLineModel(BaseModel):
     """SQLAlchemy model for TransactionLine entity."""
     
     __tablename__ = "transaction_lines"

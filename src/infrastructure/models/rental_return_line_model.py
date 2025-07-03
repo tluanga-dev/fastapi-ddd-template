@@ -50,11 +50,11 @@ class RentalReturnLineModel(BaseModel):
     notes = Column(Text, nullable=True)
     
     # Relationships
-    rental_return = relationship(
-        "RentalReturnModel",
-        back_populates="lines",
-        foreign_keys=[return_id]
-    )
+    # rental_return = relationship(
+    #     "RentalReturnModel", 
+    #     back_populates="lines",
+    #     foreign_keys=[return_id]
+    # )
     inventory_unit = relationship(
         "InventoryUnitModel",
         foreign_keys=[inventory_unit_id]

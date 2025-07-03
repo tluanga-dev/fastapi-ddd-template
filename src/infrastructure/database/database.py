@@ -21,4 +21,9 @@ Base = declarative_base()
 
 async def get_session():
     async with async_session_maker() as session:
-        yield session
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
