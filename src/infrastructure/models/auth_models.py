@@ -3,7 +3,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQL_UUID
 import uuid
 
-from src.infrastructure.database.database import Base
+from src.infrastructure.database import Base
 from src.infrastructure.models.base import BaseModel
 
 

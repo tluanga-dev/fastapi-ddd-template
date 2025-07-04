@@ -1,7 +1,9 @@
 from fastapi import APIRouter
 
-from src.api.v1.endpoints.simple_auth import router as auth_router
+from src.api.v1.endpoints.auth import router as auth_router
 from src.api.v1.endpoints.users import router as users_router
+from src.api.v1.endpoints.roles import router as roles_router
+from src.api.v1.endpoints.permissions import router as permissions_router
 from src.api.v1.endpoints.locations import router as locations_router
 from src.api.v1.endpoints.categories import router as categories_router
 from src.api.v1.endpoints.brand_endpoints import router as brands_router
@@ -20,6 +22,8 @@ api_router = APIRouter()
 
 api_router.include_router(auth_router, prefix="/auth", tags=["authentication"])
 api_router.include_router(users_router, prefix="/users", tags=["users"])
+api_router.include_router(roles_router, prefix="/roles", tags=["roles"])
+api_router.include_router(permissions_router, prefix="/permissions", tags=["permissions"])
 api_router.include_router(locations_router, prefix="/locations", tags=["locations"])
 api_router.include_router(categories_router, prefix="/categories", tags=["categories"])
 api_router.include_router(brands_router, prefix="/brands", tags=["brands"])

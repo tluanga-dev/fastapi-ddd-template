@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from src.api.v1.schemas.user import UserCreate, UserUpdate, UserResponse
 from src.api.v1.dependencies.repositories import get_user_repository
+from src.api.v1.dependencies.auth import require_permissions
+from src.domain.entities.user import User
 from src.application.use_cases.user import (
     CreateUserUseCase,
     GetUserUseCase,
@@ -21,6 +23,7 @@ router = APIRouter()
 async def create_user(
     user_data: UserCreate,
     user_repo: UserRepository = Depends(get_user_repository),
+    current_user: User = Depends(require_permissions(["USER_CREATE"]))
 ):
     use_case = CreateUserUseCase(user_repo)
     try:
@@ -49,6 +52,7 @@ async def create_user(
 async def get_user(
     user_id: UUID,
     user_repo: UserRepository = Depends(get_user_repository),
+    current_user: User = Depends(require_permissions(["USER_VIEW"]))
 ):
     use_case = GetUserUseCase(user_repo)
     user = await use_case.execute_by_id(user_id)
@@ -74,6 +78,7 @@ async def list_users(
     limit: int = 100,
     active_only: bool = True,
     user_repo: UserRepository = Depends(get_user_repository),
+    current_user: User = Depends(require_permissions(["USER_VIEW"]))
 ):
     use_case = ListUsersUseCase(user_repo)
     users = await use_case.execute(skip=skip, limit=limit, active_only=active_only)
@@ -99,6 +104,7 @@ async def update_user(
     user_id: UUID,
     user_data: UserUpdate,
     user_repo: UserRepository = Depends(get_user_repository),
+    current_user: User = Depends(require_permissions(["USER_UPDATE"]))
 ):
     use_case = UpdateUserUseCase(user_repo)
     try:
@@ -128,6 +134,7 @@ async def update_user(
 async def delete_user(
     user_id: UUID,
     user_repo: UserRepository = Depends(get_user_repository),
+    current_user: User = Depends(require_permissions(["USER_DELETE"]))
 ):
     use_case = DeleteUserUseCase(user_repo)
     try:

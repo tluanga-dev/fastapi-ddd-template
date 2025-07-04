@@ -1,4 +1,4 @@
-from .user import UserModel
+from .auth_models import UserModel, RoleModel, PermissionModel
 from .location_model import LocationModel
 from .category_model import CategoryModel
 from .brand_model import BrandModel
@@ -18,6 +18,8 @@ from .inspection_report_model import InspectionReportModel
 
 __all__ = [
     "UserModel",
+    "RoleModel", 
+    "PermissionModel",
     "LocationModel",
     "CategoryModel",
     "BrandModel",

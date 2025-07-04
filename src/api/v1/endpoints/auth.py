@@ -22,6 +22,7 @@ from src.core.security import (
     ACCESS_TOKEN_EXPIRE_MINUTES
 )
 from src.domain.entities.user import User
+from src.domain.value_objects.email import Email
 
 router = APIRouter()
 
@@ -61,6 +62,12 @@ def _user_to_response(user: User) -> UserResponse:
     )
 
 
+@router.get("/test")
+async def test_auth():
+    """Test authentication endpoint."""
+    return {"message": "Authentication system is working"}
+
+
 @router.post("/login", response_model=LoginResponse)
 async def login(
     login_data: LoginRequest,
@@ -68,7 +75,7 @@ async def login(
 ):
     """Authenticate user and return JWT tokens."""
     user_repo = SQLUserRepository(db)
-    user = await user_repo.get_by_email(login_data.email)
+    user = await user_repo.get_by_email(Email(login_data.email))
     
     if not user or not verify_password(login_data.password, user.hashed_password):
         raise HTTPException(
@@ -140,7 +147,7 @@ async def refresh_token(
             
         # Get user and verify still active
         user_repo = SQLUserRepository(db)
-        user = await user_repo.get_by_email(email)
+        user = await user_repo.get_by_email(Email(email))
         
         if not user or not user.is_active:
             raise HTTPException(

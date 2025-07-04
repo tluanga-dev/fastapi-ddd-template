@@ -14,6 +14,7 @@ class User(BaseEntity):
         name: str,
         hashed_password: str,
         role: Optional[Role] = None,
+        role_id: Optional[UUID] = None,
         first_name: Optional[str] = None,
         last_name: Optional[str] = None,
         username: Optional[str] = None,
@@ -32,6 +33,7 @@ class User(BaseEntity):
         self.name = name
         self.hashed_password = hashed_password
         self.role = role
+        self.role_id = role_id
         self.first_name = first_name or name.split()[0] if name else ""
         self.last_name = last_name or " ".join(name.split()[1:]) if name and len(name.split()) > 1 else ""
         self.username = username or email.value
