@@ -11,89 +11,14 @@ from datetime import datetime
 
 router = APIRouter()
 
-# Demo users data
+# WARNING: This is a development-only authentication system
+# DO NOT USE IN PRODUCTION
+# Replace with proper JWT authentication, user management, and database integration
+
+# For development purposes only - no hardcoded credentials in production
 DEMO_USERS = {
-    "admin@example.com": {
-        "id": "1",
-        "email": "admin@example.com",
-        "username": "admin",
-        "firstName": "Admin",
-        "lastName": "User",
-        "name": "Admin User",
-        "password": "admin123",  # In production, this would be hashed
-        "role": {
-            "id": "1",
-            "name": "Administrator",
-            "description": "Full system access",
-            "permissions": [
-                {"id": "1", "code": "SALE_CREATE", "type": "SALE_CREATE", "description": "Create sales"},
-                {"id": "2", "code": "SALE_VIEW", "type": "SALE_VIEW", "description": "View sales"},
-                {"id": "3", "code": "RENTAL_CREATE", "type": "RENTAL_CREATE", "description": "Create rentals"},
-                {"id": "4", "code": "RENTAL_VIEW", "type": "RENTAL_VIEW", "description": "View rentals"},
-                {"id": "5", "code": "CUSTOMER_CREATE", "type": "CUSTOMER_CREATE", "description": "Create customers"},
-                {"id": "6", "code": "CUSTOMER_VIEW", "type": "CUSTOMER_VIEW", "description": "View customers"},
-                {"id": "7", "code": "INVENTORY_CREATE", "type": "INVENTORY_CREATE", "description": "Create inventory"},
-                {"id": "8", "code": "INVENTORY_VIEW", "type": "INVENTORY_VIEW", "description": "View inventory"},
-                {"id": "9", "code": "INVENTORY_UPDATE", "type": "INVENTORY_UPDATE", "description": "Update inventory"},
-                {"id": "10", "code": "INVENTORY_DELETE", "type": "INVENTORY_DELETE", "description": "Delete inventory"},
-                {"id": "11", "code": "REPORT_VIEW", "type": "REPORT_VIEW", "description": "View reports"},
-                {"id": "12", "code": "SYSTEM_CONFIG", "type": "SYSTEM_CONFIG", "description": "System configuration"},
-            ]
-        },
-        "isActive": True,
-        "createdAt": "2025-01-01T00:00:00Z"
-    },
-    "manager@example.com": {
-        "id": "2",
-        "email": "manager@example.com",
-        "username": "manager",
-        "firstName": "Manager",
-        "lastName": "User",
-        "name": "Manager User",
-        "password": "manager123",
-        "role": {
-            "id": "2",
-            "name": "Manager",
-            "description": "Management access",
-            "permissions": [
-                {"id": "1", "code": "SALE_CREATE", "type": "SALE_CREATE", "description": "Create sales"},
-                {"id": "2", "code": "SALE_VIEW", "type": "SALE_VIEW", "description": "View sales"},
-                {"id": "3", "code": "RENTAL_CREATE", "type": "RENTAL_CREATE", "description": "Create rentals"},
-                {"id": "4", "code": "RENTAL_VIEW", "type": "RENTAL_VIEW", "description": "View rentals"},
-                {"id": "5", "code": "CUSTOMER_CREATE", "type": "CUSTOMER_CREATE", "description": "Create customers"},
-                {"id": "6", "code": "CUSTOMER_VIEW", "type": "CUSTOMER_VIEW", "description": "View customers"},
-                {"id": "7", "code": "INVENTORY_CREATE", "type": "INVENTORY_CREATE", "description": "Create inventory"},
-                {"id": "8", "code": "INVENTORY_VIEW", "type": "INVENTORY_VIEW", "description": "View inventory"},
-                {"id": "9", "code": "INVENTORY_UPDATE", "type": "INVENTORY_UPDATE", "description": "Update inventory"},
-                {"id": "10", "code": "REPORT_VIEW", "type": "REPORT_VIEW", "description": "View reports"},
-            ]
-        },
-        "isActive": True,
-        "createdAt": "2025-01-01T00:00:00Z"
-    },
-    "staff@example.com": {
-        "id": "3",
-        "email": "staff@example.com",
-        "username": "staff",
-        "firstName": "Staff",
-        "lastName": "User",
-        "name": "Staff User",
-        "password": "staff123",
-        "role": {
-            "id": "3",
-            "name": "Staff",
-            "description": "Basic access",
-            "permissions": [
-                {"id": "1", "code": "SALE_CREATE", "type": "SALE_CREATE", "description": "Create sales"},
-                {"id": "2", "code": "SALE_VIEW", "type": "SALE_VIEW", "description": "View sales"},
-                {"id": "3", "code": "RENTAL_VIEW", "type": "RENTAL_VIEW", "description": "View rentals"},
-                {"id": "4", "code": "CUSTOMER_VIEW", "type": "CUSTOMER_VIEW", "description": "View customers"},
-                {"id": "5", "code": "INVENTORY_VIEW", "type": "INVENTORY_VIEW", "description": "View inventory"},
-            ]
-        },
-        "isActive": True,
-        "createdAt": "2025-01-01T00:00:00Z"
-    }
+    # NOTE: These are development-only demo accounts
+    # In production, use proper user management with hashed passwords
 }
 
 
@@ -123,39 +48,17 @@ def create_simple_token(user_data: dict) -> str:
 
 @router.post("/login", response_model=LoginResponse)
 async def login(login_data: LoginRequest):
-    """Demo login endpoint"""
-    email = str(login_data.email).lower()
+    """Development-only login endpoint - Replace with proper authentication"""
+    # NOTE: This is a development-only endpoint
+    # In production, implement proper user authentication with:
+    # - Database user lookup
+    # - Password hashing verification
+    # - JWT token generation
+    # - User role/permission management
     
-    if email not in DEMO_USERS:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password"
-        )
-    
-    user = DEMO_USERS[email]
-    
-    if user["password"] != login_data.password:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password"
-        )
-    
-    # Create tokens
-    access_token = create_simple_token(user)
-    refresh_token = create_simple_token(user)  # Same for demo
-    
-    # Remove password from response
-    user_response = {k: v for k, v in user.items() if k != "password"}
-    
-    return LoginResponse(
-        success=True,
-        data={
-            "user": user_response,
-            "accessToken": access_token,
-            "refreshToken": refresh_token,
-            "expiresIn": 86400  # 24 hours
-        },
-        message="Login successful"
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Authentication system not implemented. Please implement proper user management."
     )
 
 
@@ -167,8 +70,11 @@ async def refresh_token():
 
 @router.get("/me")
 async def get_current_user():
-    """Demo current user endpoint"""
-    return {"success": True, "data": DEMO_USERS["admin@example.com"]}
+    """Development-only current user endpoint"""
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="User management not implemented. Please implement proper user authentication."
+    )
 
 
 @router.post("/logout")
