@@ -15,8 +15,8 @@ class TransactionLineModel(BaseModel):
     transaction_id = Column(UUID(), ForeignKey("transaction_headers.id"), nullable=False, index=True)
     line_number = Column(Integer, nullable=False)
     line_type = Column(Enum(LineItemType), nullable=False, index=True)
-    item_id = Column(UUID(), nullable=True, index=True)
-    item_reference = Column(String(100), nullable=True, index=True)
+    sku_id = Column(UUID(), ForeignKey("skus.id"), nullable=True, index=True)
+    inventory_unit_id = Column(UUID(), ForeignKey("inventory_units.id"), nullable=True, index=True)
     description = Column(String(500), nullable=False)
     
     # Quantity and pricing fields - using Numeric for precision

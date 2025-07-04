@@ -15,8 +15,8 @@ class TransactionLine(BaseEntity):
         transaction_id: UUID,
         line_number: int,
         line_type: LineItemType,
-        item_id: Optional[UUID] = None,
-        item_reference: Optional[str] = None,
+        sku_id: Optional[UUID] = None,
+        inventory_unit_id: Optional[UUID] = None,
         description: str = "",
         quantity: Decimal = Decimal("1"),
         unit_price: Decimal = Decimal("0.00"),
@@ -51,8 +51,8 @@ class TransactionLine(BaseEntity):
         self.transaction_id = transaction_id
         self.line_number = line_number
         self.line_type = line_type
-        self.item_id = item_id
-        self.item_reference = item_reference
+        self.sku_id = sku_id
+        self.inventory_unit_id = inventory_unit_id
         self.description = description
         self.quantity = quantity
         self.unit_price = unit_price
