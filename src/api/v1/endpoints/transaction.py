@@ -21,6 +21,9 @@ from ....application.use_cases.transaction import (
     CancelTransactionUseCase,
     GetTransactionHistoryUseCase
 )
+from ....application.use_cases.transaction.create_purchase_transaction_use_case import CreatePurchaseTransactionUseCase
+from ....application.use_cases.transaction.record_completed_purchase_use_case import RecordCompletedPurchaseUseCase
+from ....application.use_cases.transaction.receive_goods_use_case import ReceiveGoodsUseCase
 
 from ....domain.value_objects.transaction_type import (
     TransactionType, TransactionStatus, PaymentStatus, PaymentMethod,
@@ -47,6 +50,14 @@ from ..schemas.transaction import (
     DailyTransactionSummary,
     RevenueReport,
     OverdueRental
+)
+from ..schemas.purchase_transaction import (
+    PurchaseTransactionCreate,
+    CompletedPurchaseRecord,
+    CompletedPurchaseItemRecord,
+    # Legacy/deprecated imports:
+    GoodsReceiptRequest,
+    PurchaseOrderApprovalRequest
 )
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
@@ -716,3 +727,232 @@ async def soft_delete_transaction(
         )
     
     await transaction_repo.delete(transaction_id)
+
+
+# Purchase Transaction Endpoints
+@router.post("/purchases", response_model=TransactionHeaderResponse, status_code=status.HTTP_201_CREATED)
+async def record_completed_purchase(
+    transaction_data: CompletedPurchaseRecord,
+    db: AsyncSession = Depends(get_db)
+) -> TransactionHeaderResponse:
+    """Record a completed purchase transaction and create inventory records."""
+    transaction_repo = SQLAlchemyTransactionHeaderRepository(db)
+    line_repo = SQLAlchemyTransactionLineRepository(db)
+    customer_repo = SQLAlchemyCustomerRepository(db)
+    sku_repo = SQLAlchemySKURepository(db)
+    inventory_repo = SQLAlchemyInventoryUnitRepository(db)
+    stock_repo = SQLAlchemyStockLevelRepository(db)
+    
+    use_case = RecordCompletedPurchaseUseCase(
+        transaction_repo, line_repo, sku_repo, customer_repo, inventory_repo, stock_repo
+    )
+    
+    try:
+        # Convert items to the expected format
+        items = []
+        for item in transaction_data.items:
+            items.append({
+                'sku_id': item.sku_id,
+                'quantity': item.quantity,
+                'unit_cost': item.unit_cost,
+                'serial_numbers': item.serial_numbers,
+                'condition_notes': item.condition_notes,
+                'notes': item.notes
+            })
+        
+        transaction = await use_case.execute(
+            supplier_id=transaction_data.supplier_id,
+            location_id=transaction_data.location_id,
+            items=items,
+            purchase_date=transaction_data.purchase_date,
+            tax_rate=transaction_data.tax_rate,
+            invoice_number=transaction_data.invoice_number,
+            invoice_date=transaction_data.invoice_date,
+            notes=transaction_data.notes
+        )
+        
+        # Load lines for response
+        lines = await line_repo.get_by_transaction(transaction.id)
+        
+        response = TransactionHeaderResponse.model_validate(transaction)
+        response.lines = [TransactionLineResponse.model_validate(line) for line in lines]
+        
+        return response
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+# Legacy endpoint for backward compatibility
+@router.post("/purchases/legacy", response_model=TransactionHeaderResponse, status_code=status.HTTP_201_CREATED)
+async def create_purchase_transaction_legacy(
+    transaction_data: PurchaseTransactionCreate,
+    db: AsyncSession = Depends(get_db)
+) -> TransactionHeaderResponse:
+    """DEPRECATED: Create a new purchase order. Use /purchases endpoint instead."""
+    transaction_repo = SQLAlchemyTransactionHeaderRepository(db)
+    line_repo = SQLAlchemyTransactionLineRepository(db)
+    customer_repo = SQLAlchemyCustomerRepository(db)
+    sku_repo = SQLAlchemySKURepository(db)
+    inventory_repo = SQLAlchemyInventoryUnitRepository(db)
+    stock_repo = SQLAlchemyStockLevelRepository(db)
+    
+    use_case = CreatePurchaseTransactionUseCase(
+        transaction_repo, line_repo, sku_repo, customer_repo, inventory_repo, stock_repo
+    )
+    
+    try:
+        # Convert items to the expected format
+        items = []
+        for item in transaction_data.items:
+            items.append({
+                'sku_id': item.sku_id,
+                'quantity': item.quantity,
+                'unit_cost': item.unit_cost,
+                'notes': item.notes
+            })
+        
+        transaction = await use_case.execute(
+            supplier_id=transaction_data.supplier_id,
+            location_id=transaction_data.location_id,
+            items=items,
+            expected_delivery_date=transaction_data.expected_delivery_date,
+            tax_rate=transaction_data.tax_rate,
+            notes=transaction_data.notes
+        )
+        
+        # Load lines for response
+        lines = await line_repo.get_by_transaction(transaction.id)
+        
+        response = TransactionHeaderResponse.model_validate(transaction)
+        response.lines = [TransactionLineResponse.model_validate(line) for line in lines]
+        
+        return response
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.get("/purchases", response_model=TransactionListResponse)
+async def list_purchase_transactions(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
+    status_filter: Optional[TransactionStatus] = Query(None, alias="status"),
+    supplier_id: Optional[UUID] = None,
+    location_id: Optional[UUID] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    include_lines: bool = False,
+    db: AsyncSession = Depends(get_db)
+) -> TransactionListResponse:
+    """List purchase orders with filters."""
+    transaction_repo = SQLAlchemyTransactionHeaderRepository(db)
+    line_repo = SQLAlchemyTransactionLineRepository(db)
+    
+    transactions, total = await transaction_repo.list(
+        skip=skip,
+        limit=limit,
+        transaction_type=TransactionType.PURCHASE,
+        status=status_filter,
+        customer_id=supplier_id,
+        location_id=location_id,
+        start_date=start_date,
+        end_date=end_date,
+        is_active=True
+    )
+    
+    items = []
+    for transaction in transactions:
+        response = TransactionHeaderResponse.model_validate(transaction)
+        if include_lines:
+            lines = await line_repo.get_by_transaction(transaction.id)
+            response.lines = [TransactionLineResponse.model_validate(line) for line in lines]
+        items.append(response)
+    
+    return TransactionListResponse(
+        items=items,
+        total=total,
+        skip=skip,
+        limit=limit
+    )
+
+
+@router.get("/purchases/{transaction_id}", response_model=TransactionHeaderResponse)
+async def get_purchase_transaction(
+    transaction_id: UUID,
+    include_lines: bool = Query(True, description="Include transaction lines"),
+    db: AsyncSession = Depends(get_db)
+) -> TransactionHeaderResponse:
+    """Get purchase order by ID."""
+    transaction_repo = SQLAlchemyTransactionHeaderRepository(db)
+    line_repo = SQLAlchemyTransactionLineRepository(db)
+    
+    transaction = await transaction_repo.get_by_id(transaction_id)
+    if not transaction:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Transaction with id {transaction_id} not found"
+        )
+    
+    if transaction.transaction_type != TransactionType.PURCHASE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Transaction is not a purchase order"
+        )
+    
+    response = TransactionHeaderResponse.model_validate(transaction)
+    
+    if include_lines:
+        lines = await line_repo.get_by_transaction(transaction_id)
+        response.lines = [TransactionLineResponse.model_validate(line) for line in lines]
+    
+    return response
+
+
+# DEPRECATED ENDPOINTS: These are no longer needed in the new purchase flow
+# They are kept for backward compatibility but will return appropriate errors
+
+@router.post("/purchases/{transaction_id}/receive", response_model=TransactionHeaderResponse)
+async def receive_goods_deprecated(
+    transaction_id: UUID,
+    receipt_data: GoodsReceiptRequest,
+    db: AsyncSession = Depends(get_db)
+) -> TransactionHeaderResponse:
+    """
+    DEPRECATED: Process goods receipt for a purchase order.
+    
+    This endpoint is no longer supported in the new purchase flow where inventory 
+    is created immediately when recording a completed purchase.
+    """
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail=(
+            "This endpoint is deprecated. In the new purchase flow, inventory is created "
+            "immediately when recording a completed purchase via POST /transactions/purchases. "
+            "There is no separate goods receipt process."
+        )
+    )
+
+
+@router.post("/purchases/{transaction_id}/approve", response_model=TransactionHeaderResponse)
+async def approve_purchase_order_deprecated(
+    transaction_id: UUID,
+    approval_data: PurchaseOrderApprovalRequest,
+    db: AsyncSession = Depends(get_db)
+) -> TransactionHeaderResponse:
+    """
+    DEPRECATED: Approve a purchase order.
+    
+    This endpoint is no longer supported in the new purchase flow where purchases 
+    are recorded as already completed transactions.
+    """
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail=(
+            "This endpoint is deprecated. In the new purchase flow, purchases are recorded "
+            "as already completed transactions via POST /transactions/purchases. "
+            "There is no approval workflow."
+        )
+    )

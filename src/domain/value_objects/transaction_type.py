@@ -3,16 +3,19 @@ from enum import Enum
 
 class TransactionType(str, Enum):
     """Transaction type enumeration."""
+
     SALE = "SALE"
     RENTAL = "RENTAL"
     RETURN = "RETURN"
     EXCHANGE = "EXCHANGE"
     REFUND = "REFUND"
     ADJUSTMENT = "ADJUSTMENT"
+    PURCHASE = "PURCHASE"
 
 
 class TransactionStatus(str, Enum):
     """Transaction status enumeration."""
+
     DRAFT = "DRAFT"
     PENDING = "PENDING"
     CONFIRMED = "CONFIRMED"
@@ -24,6 +27,7 @@ class TransactionStatus(str, Enum):
 
 class PaymentMethod(str, Enum):
     """Payment method enumeration."""
+
     CASH = "CASH"
     CREDIT_CARD = "CREDIT_CARD"
     DEBIT_CARD = "DEBIT_CARD"
@@ -36,6 +40,7 @@ class PaymentMethod(str, Enum):
 
 class PaymentStatus(str, Enum):
     """Payment status enumeration."""
+
     PENDING = "PENDING"
     PAID = "PAID"
     PARTIALLY_PAID = "PARTIALLY_PAID"
@@ -46,6 +51,7 @@ class PaymentStatus(str, Enum):
 
 class RentalPeriodUnit(str, Enum):
     """Rental period unit enumeration."""
+
     HOUR = "HOUR"
     DAY = "DAY"
     WEEK = "WEEK"
@@ -55,6 +61,7 @@ class RentalPeriodUnit(str, Enum):
 
 class LineItemType(str, Enum):
     """Line item type enumeration."""
+
     PRODUCT = "PRODUCT"
     SERVICE = "SERVICE"
     FEE = "FEE"
