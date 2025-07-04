@@ -16,10 +16,7 @@ router = APIRouter()
 # Replace with proper JWT authentication, user management, and database integration
 
 # For development purposes only - no hardcoded credentials in production
-DEMO_USERS = {
-    # NOTE: These are development-only demo accounts
-    # In production, use proper user management with hashed passwords
-}
+DEMO_USERS = {}
 
 
 class LoginRequest(BaseModel):
