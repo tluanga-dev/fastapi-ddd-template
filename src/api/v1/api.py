@@ -1,9 +1,8 @@
 from fastapi import APIRouter
 
 from src.api.v1.endpoints.auth import router as auth_router
+from src.api.v1.endpoints.auth_simple import router as auth_simple_router
 from src.api.v1.endpoints.users import router as users_router
-from src.api.v1.endpoints.roles import router as roles_router
-from src.api.v1.endpoints.permissions import router as permissions_router
 from src.api.v1.endpoints.locations import router as locations_router
 from src.api.v1.endpoints.categories import router as categories_router
 from src.api.v1.endpoints.brand_endpoints import router as brands_router
@@ -17,13 +16,13 @@ from src.api.v1.endpoints.inventory import router as inventory_router
 from src.api.v1.endpoints.transaction import router as transaction_router
 from src.api.v1.endpoints.rental_return import router as rental_return_router
 from src.api.v1.endpoints.rental_transaction import router as rental_transaction_router
+from src.api.v1.endpoints.rental_due_today import router as rental_due_today_router
 
 api_router = APIRouter()
 
 api_router.include_router(auth_router, prefix="/auth", tags=["authentication"])
+api_router.include_router(auth_simple_router, prefix="/auth", tags=["auth-simple"])
 api_router.include_router(users_router, prefix="/users", tags=["users"])
-api_router.include_router(roles_router, prefix="/roles", tags=["roles"])
-api_router.include_router(permissions_router, prefix="/permissions", tags=["permissions"])
 api_router.include_router(locations_router, prefix="/locations", tags=["locations"])
 api_router.include_router(categories_router, prefix="/categories", tags=["categories"])
 api_router.include_router(brands_router, prefix="/brands", tags=["brands"])
@@ -37,3 +36,4 @@ api_router.include_router(inventory_router, tags=["inventory"])
 api_router.include_router(transaction_router, tags=["transactions"])
 api_router.include_router(rental_return_router, tags=["rental-returns"])
 api_router.include_router(rental_transaction_router, tags=["rental-transactions"])
+api_router.include_router(rental_due_today_router, tags=["rentals-due-today"])

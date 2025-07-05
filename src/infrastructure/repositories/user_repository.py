@@ -1,11 +1,13 @@
-from typing import Optional
+from typing import Optional, Set
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.domain.entities.user import User
 from src.domain.value_objects.email import Email
+from src.domain.value_objects.user_type import UserType
 from src.domain.repositories.user_repository import UserRepository
-from src.infrastructure.models.auth_models import UserModel
+from src.infrastructure.models.auth_models import UserModel, UserPermissionModel
 from src.infrastructure.repositories.base import SQLAlchemyRepository
 
 
@@ -14,29 +16,19 @@ class UserRepositoryImpl(SQLAlchemyRepository[User, UserModel], UserRepository):
         super().__init__(session, UserModel, User)
 
     def _to_entity(self, model: UserModel) -> User:
-        from src.domain.entities.role import Role, Permission
+        # Don't access relationships unless they're already loaded
+        direct_permissions = set()
         
+        # Convert role if it's loaded (not a lazy attribute)
         role = None
-        if model.role:
-            permissions = [
-                Permission(
-                    id=perm.id,
-                    code=perm.code,
-                    name=perm.name,
-                    description=perm.description,
-                    created_at=perm.created_at,
-                    updated_at=perm.updated_at,
-                    is_active=perm.is_active,
-                    created_by=perm.created_by,
-                    updated_by=perm.updated_by,
-                )
-                for perm in model.role.permissions
-            ]
+        if model.role is not None:
+            from src.domain.entities.role import Role
+            # Create role without permissions for now
             role = Role(
                 id=model.role.id,
                 name=model.role.name,
                 description=model.role.description,
-                permissions=permissions,
+                permissions=[],  # Empty permissions to avoid lazy loading
                 created_at=model.role.created_at,
                 updated_at=model.role.updated_at,
                 is_active=model.role.is_active,
@@ -49,14 +41,16 @@ class UserRepositoryImpl(SQLAlchemyRepository[User, UserModel], UserRepository):
             email=Email(model.email),
             name=model.name,
             hashed_password=model.hashed_password,
+            user_type=UserType(model.user_type) if model.user_type else UserType.USER,
+            role=role,
+            role_id=model.role_id,
             is_superuser=model.is_superuser,
             first_name=model.first_name,
             last_name=model.last_name,
             username=model.username,
             location_id=model.location_id,
             last_login=model.last_login,
-            role=role,
-            role_id=model.role_id,
+            direct_permissions=direct_permissions,
             created_at=model.created_at,
             updated_at=model.updated_at,
             is_active=model.is_active,
@@ -70,13 +64,13 @@ class UserRepositoryImpl(SQLAlchemyRepository[User, UserModel], UserRepository):
             email=entity.email.value,
             name=entity.name,
             hashed_password=entity.hashed_password,
+            user_type=entity.user_type.value,
             is_superuser=entity.is_superuser,
             first_name=entity.first_name,
             last_name=entity.last_name,
             username=entity.username,
             location_id=entity.location_id,
             last_login=entity.last_login,
-            role_id=entity.role_id,
             created_at=entity.created_at,
             updated_at=entity.updated_at,
             is_active=entity.is_active,
@@ -85,51 +79,48 @@ class UserRepositoryImpl(SQLAlchemyRepository[User, UserModel], UserRepository):
         )
 
     async def get_by_email(self, email: Email) -> Optional[User]:
-        from sqlalchemy.orm import selectinload
-        from src.infrastructure.models.auth_models import RoleModel
-        
         query = select(UserModel).options(
-            selectinload(UserModel.role).selectinload(RoleModel.permissions)
+            selectinload(UserModel.role)
         ).filter(UserModel.email == email.value)
         result = await self.session.execute(query)
         model = result.scalar_one_or_none()
         return self._to_entity(model) if model else None
-
-    async def update(self, entity: User) -> User:
-        """Override update to handle eager loading of relationships"""
-        from sqlalchemy.orm import selectinload
-        from src.infrastructure.models.auth_models import RoleModel
+    
+    async def add_direct_permission(self, user_id: str, permission_code: str, granted_by: str, reason: Optional[str] = None) -> None:
+        """Add a direct permission to a user."""
+        from datetime import datetime
         
-        model = await self.session.get(UserModel, entity.id)
-        if not model:
-            raise ValueError(f"User with id {entity.id} not found")
-        
-        # Update fields
-        model.email = entity.email.value
-        model.name = entity.name
-        model.hashed_password = entity.hashed_password
-        model.is_superuser = entity.is_superuser
-        model.first_name = entity.first_name
-        model.last_name = entity.last_name
-        model.username = entity.username
-        model.location_id = entity.location_id
-        model.last_login = entity.last_login
-        model.role_id = entity.role_id
-        model.updated_at = entity.updated_at
-        model.is_active = entity.is_active
-        model.updated_by = entity.updated_by
-        
+        permission = UserPermissionModel(
+            user_id=user_id,
+            permission_code=permission_code,
+            granted_by=granted_by,
+            granted_at=datetime.utcnow(),
+            reason=reason,
+            is_active=True
+        )
+        self.session.add(permission)
         await self.session.commit()
-        
-        # Fetch with eager loading
-        query = select(UserModel).options(
-            selectinload(UserModel.role).selectinload(RoleModel.permissions)
-        ).filter(UserModel.id == entity.id)
+    
+    async def remove_direct_permission(self, user_id: str, permission_code: str) -> None:
+        """Remove a direct permission from a user."""
+        query = select(UserPermissionModel).filter(
+            UserPermissionModel.user_id == user_id,
+            UserPermissionModel.permission_code == permission_code,
+            UserPermissionModel.is_active == True
+        )
         result = await self.session.execute(query)
-        updated_model = result.scalar_one()
+        permission = result.scalar_one_or_none()
         
-        return self._to_entity(updated_model)
-
-
-# Alias for compatibility with auth modules
-SQLUserRepository = UserRepositoryImpl
+        if permission:
+            permission.is_active = False
+            await self.session.commit()
+    
+    async def get_user_direct_permissions(self, user_id: str) -> Set[str]:
+        """Get all direct permissions for a user."""
+        query = select(UserPermissionModel).filter(
+            UserPermissionModel.user_id == user_id,
+            UserPermissionModel.is_active == True
+        )
+        result = await self.session.execute(query)
+        permissions = result.scalars().all()
+        return {perm.permission_code for perm in permissions}

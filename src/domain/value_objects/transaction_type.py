@@ -70,3 +70,4 @@ class LineItemType(str, Enum):
     DEPOSIT = "DEPOSIT"
     LATE_FEE = "LATE_FEE"
     DAMAGE_FEE = "DAMAGE_FEE"
+    REFUND = "REFUND"

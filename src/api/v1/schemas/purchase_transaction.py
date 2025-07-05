@@ -69,8 +69,23 @@ class PurchaseTransactionCreate(CompletedPurchaseRecord):
         super().__init__(**data)
 
 
-# Remove unused schemas from the new flow
-# These are no longer needed since we don't have a goods receipt process
-# class GoodsReceiptLine - REMOVED
-# class GoodsReceiptRequest - REMOVED
-# class PurchaseOrderApprovalRequest - REMOVED
+# Placeholder schemas for deprecated endpoints
+# These are only used by deprecated endpoints that return HTTP 410
+
+
+class GoodsReceiptRequest(BaseModel):
+    """
+    DEPRECATED: Placeholder schema for deprecated goods receipt endpoint.
+    This endpoint returns HTTP 410 Gone.
+    """
+
+    pass
+
+
+class PurchaseOrderApprovalRequest(BaseModel):
+    """
+    DEPRECATED: Placeholder schema for deprecated purchase order approval endpoint.
+    This endpoint returns HTTP 410 Gone.
+    """
+
+    pass

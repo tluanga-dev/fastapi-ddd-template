@@ -21,10 +21,12 @@ class RoleResponse(BaseModel):
 class UserResponse(BaseModel):
     id: UUID
     email: str
-    username: str
-    first_name: str
-    last_name: str
+    username: Optional[str]
+    first_name: Optional[str]
+    last_name: Optional[str]
     name: str
+    user_type: str
+    is_superuser: bool
     role: Optional[RoleResponse]
     location_id: Optional[UUID]
     is_active: bool

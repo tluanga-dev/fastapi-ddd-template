@@ -5,9 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.security import decode_access_token, TokenData
 from src.infrastructure.database.session import get_db
-from src.infrastructure.repositories.user_repository import SQLUserRepository
+from src.infrastructure.repositories.user_repository import UserRepositoryImpl
 from src.domain.entities.user import User
-from src.domain.value_objects.email import Email
 
 security = HTTPBearer()
 
@@ -20,8 +19,8 @@ async def get_current_user(
     token = credentials.credentials
     token_data: TokenData = decode_access_token(token)
     
-    user_repo = SQLUserRepository(db)
-    user = await user_repo.get_by_email(Email(token_data.email))
+    user_repo = UserRepositoryImpl(db)
+    user = await user_repo.get_by_email(token_data.email)
     
     if user is None:
         raise HTTPException(
