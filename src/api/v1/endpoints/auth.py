@@ -101,12 +101,12 @@ async def login(
     
     # Create tokens
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    # Skip permissions for now to isolate issue
-    # permissions = list(user.get_permissions())
+    # Get user permissions for JWT token
+    permissions = list(user.get_permissions())
     access_token_data = {
         "sub": user.email.value,
         "user_id": str(user.id),
-        "permissions": []  # Empty for now
+        "permissions": permissions
     }
     access_token = create_access_token(
         data=access_token_data,
