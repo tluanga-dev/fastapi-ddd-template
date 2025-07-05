@@ -18,6 +18,14 @@ class RoleResponse(BaseModel):
     permissions: List[PermissionResponse]
 
 
+class EffectivePermissionsResponse(BaseModel):
+    user_type: str
+    is_superuser: bool
+    role_permissions: List[str]
+    direct_permissions: List[str]
+    all_permissions: List[str]
+
+
 class UserResponse(BaseModel):
     id: UUID
     email: str
@@ -32,6 +40,8 @@ class UserResponse(BaseModel):
     is_active: bool
     last_login: Optional[datetime]
     created_at: datetime
+    direct_permissions: List[str] = []
+    effective_permissions: EffectivePermissionsResponse
 
 
 class LoginRequest(BaseModel):

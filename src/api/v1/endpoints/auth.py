@@ -9,7 +9,8 @@ from src.api.v1.schemas.auth import (
     TokenResponse,
     UserResponse,
     RoleResponse,
-    PermissionResponse
+    PermissionResponse,
+    EffectivePermissionsResponse
 )
 from src.api.v1.dependencies.auth import get_current_active_user
 from src.infrastructure.database.session import get_db
@@ -29,6 +30,8 @@ router = APIRouter()
 def _user_to_response(user: User) -> UserResponse:
     """Convert User entity to UserResponse."""
     role_response = None
+    role_permissions = []
+    
     if user.role:
         permissions_response = [
             PermissionResponse(
@@ -45,6 +48,19 @@ def _user_to_response(user: User) -> UserResponse:
             description=user.role.description,
             permissions=permissions_response
         )
+        role_permissions = [perm.code for perm in user.role.permissions]
+    
+    # Get effective permissions from user
+    all_permissions = list(user.get_permissions())
+    direct_permissions = list(user.direct_permissions)
+    
+    effective_permissions = EffectivePermissionsResponse(
+        user_type=user.user_type.value,
+        is_superuser=user.is_superuser,
+        role_permissions=role_permissions,
+        direct_permissions=direct_permissions,
+        all_permissions=all_permissions
+    )
     
     return UserResponse(
         id=user.id,
@@ -59,7 +75,9 @@ def _user_to_response(user: User) -> UserResponse:
         location_id=user.location_id,
         is_active=user.is_active,
         last_login=user.last_login,
-        created_at=user.created_at
+        created_at=user.created_at,
+        direct_permissions=direct_permissions,
+        effective_permissions=effective_permissions
     )
 
 

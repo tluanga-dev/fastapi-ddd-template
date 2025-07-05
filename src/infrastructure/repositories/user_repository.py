@@ -22,13 +22,30 @@ class UserRepositoryImpl(SQLAlchemyRepository[User, UserModel], UserRepository):
         # Convert role if it's loaded (not a lazy attribute)
         role = None
         if model.role is not None:
-            from src.domain.entities.role import Role
-            # Create role without permissions for now
+            from src.domain.entities.role import Role, Permission
+            
+            # Convert role permissions
+            role_permissions = []
+            if hasattr(model.role, 'permissions') and model.role.permissions:
+                for perm_model in model.role.permissions:
+                    permission = Permission(
+                        id=perm_model.id,
+                        code=perm_model.code,
+                        name=perm_model.name,
+                        description=perm_model.description,
+                        created_at=perm_model.created_at,
+                        updated_at=perm_model.updated_at,
+                        is_active=perm_model.is_active,
+                        created_by=perm_model.created_by,
+                        updated_by=perm_model.updated_by,
+                    )
+                    role_permissions.append(permission)
+            
             role = Role(
                 id=model.role.id,
                 name=model.role.name,
                 description=model.role.description,
-                permissions=[],  # Empty permissions to avoid lazy loading
+                permissions=role_permissions,
                 created_at=model.role.created_at,
                 updated_at=model.role.updated_at,
                 is_active=model.role.is_active,
@@ -79,8 +96,9 @@ class UserRepositoryImpl(SQLAlchemyRepository[User, UserModel], UserRepository):
         )
 
     async def get_by_email(self, email: Email) -> Optional[User]:
+        from src.infrastructure.models.auth_models import RoleModel
         query = select(UserModel).options(
-            selectinload(UserModel.role)
+            selectinload(UserModel.role).selectinload(RoleModel.permissions)
         ).filter(UserModel.email == email.value)
         result = await self.session.execute(query)
         model = result.scalar_one_or_none()
