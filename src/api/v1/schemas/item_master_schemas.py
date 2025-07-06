@@ -99,3 +99,38 @@ class ItemMasterDropdownResponse(BaseModel):
     options: List[ItemMasterDropdownOption]
     total: int
     limit: int
+
+
+class ItemMasterEnrichedResponse(ItemMasterResponse):
+    """Schema for Item Master response with related entity names."""
+    category_name: Optional[str] = Field(None, description="Category name")
+    brand_name: Optional[str] = Field(None, description="Brand name")
+    
+    @classmethod
+    def from_model_with_relations(cls, model) -> "ItemMasterEnrichedResponse":
+        """Create enriched response from SQLAlchemy model with loaded relationships."""
+        return cls(
+            id=model.id,
+            item_code=model.item_code,
+            item_name=model.item_name,
+            category_id=model.category_id,
+            category_name=model.category.category_name if model.category else None,
+            brand_id=model.brand_id,
+            brand_name=model.brand.brand_name if model.brand else None,
+            item_type=model.item_type,
+            description=model.description,
+            is_serialized=model.is_serialized,
+            is_active=model.is_active,
+            created_at=model.created_at,
+            updated_at=model.updated_at,
+            created_by=model.created_by,
+            updated_by=model.updated_by
+        )
+
+
+class ItemMasterEnrichedListResponse(BaseModel):
+    """Schema for paginated Item Master list response with enriched data."""
+    items: List[ItemMasterEnrichedResponse]
+    total: int
+    skip: int
+    limit: int

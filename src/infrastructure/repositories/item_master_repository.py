@@ -2,6 +2,7 @@ from typing import List, Optional, Tuple
 from uuid import UUID
 from sqlalchemy import select, func, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from ...domain.entities.item_master import ItemMaster
 from ...domain.repositories.item_master_repository import ItemMasterRepository
@@ -252,3 +253,68 @@ class SQLAlchemyItemMasterRepository(ItemMasterRepository):
         count = result.scalar_one()
         
         return count > 0
+    
+    async def list_with_relationships(
+        self,
+        skip: int = 0,
+        limit: int = 100,
+        category_id: Optional[UUID] = None,
+        brand_id: Optional[UUID] = None,
+        item_type: Optional[ItemType] = None,
+        is_serialized: Optional[bool] = None,
+        search: Optional[str] = None,
+        is_active: Optional[bool] = True
+    ) -> Tuple[List[ItemMasterModel], int]:
+        """List item masters with category and brand relationships loaded."""
+        # Base query with eager loading
+        query = select(ItemMasterModel).options(
+            selectinload(ItemMasterModel.category),
+            selectinload(ItemMasterModel.brand)
+        )
+        count_query = select(func.count()).select_from(ItemMasterModel)
+        
+        # Apply filters
+        filters = []
+        
+        if is_active is not None:
+            filters.append(ItemMasterModel.is_active == is_active)
+        
+        if category_id:
+            filters.append(ItemMasterModel.category_id == category_id)
+        
+        if brand_id:
+            filters.append(ItemMasterModel.brand_id == brand_id)
+        
+        if item_type:
+            filters.append(ItemMasterModel.item_type == item_type)
+        
+        if is_serialized is not None:
+            filters.append(ItemMasterModel.is_serialized == is_serialized)
+        
+        if search:
+            search_term = f"%{search}%"
+            search_filter = or_(
+                ItemMasterModel.item_code.ilike(search_term),
+                ItemMasterModel.item_name.ilike(search_term),
+                ItemMasterModel.description.ilike(search_term)
+            )
+            filters.append(search_filter)
+        
+        # Apply all filters
+        if filters:
+            where_clause = and_(*filters)
+            query = query.where(where_clause)
+            count_query = count_query.where(where_clause)
+        
+        # Get total count
+        count_result = await self.session.execute(count_query)
+        total_count = count_result.scalar_one()
+        
+        # Apply ordering and pagination
+        query = query.order_by(ItemMasterModel.item_code).offset(skip).limit(limit)
+        
+        # Execute query
+        result = await self.session.execute(query)
+        items = result.scalars().all()
+        
+        return items, total_count

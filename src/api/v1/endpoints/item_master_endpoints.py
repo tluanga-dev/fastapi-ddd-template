@@ -20,7 +20,9 @@ from ..schemas.item_master_schemas import (
     ItemMasterListResponse,
     ItemMasterSerializationUpdate,
     ItemMasterDropdownOption,
-    ItemMasterDropdownResponse
+    ItemMasterDropdownResponse,
+    ItemMasterEnrichedResponse,
+    ItemMasterEnrichedListResponse
 )
 from ..dependencies.database import get_db
 
@@ -102,7 +104,7 @@ async def get_item_master_by_code(
     return ItemMasterResponse.from_entity(item)
 
 
-@router.get("/", response_model=ItemMasterListResponse)
+@router.get("/", response_model=ItemMasterEnrichedListResponse)
 async def list_item_masters(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Max records to return"),
@@ -114,9 +116,9 @@ async def list_item_masters(
     is_active: Optional[bool] = Query(True, description="Filter by active status"),
     repository: SQLAlchemyItemMasterRepository = Depends(get_item_master_repository)
 ):
-    """List item masters with pagination and filters."""
-    use_case = ListItemMastersUseCase(repository)
-    items, total_count = await use_case.execute(
+    """List item masters with pagination and filters, including category and brand names."""
+    # Use the new method that loads relationships
+    items, total_count = await repository.list_with_relationships(
         skip=skip,
         limit=limit,
         category_id=category_id,
@@ -127,8 +129,8 @@ async def list_item_masters(
         is_active=is_active
     )
     
-    return ItemMasterListResponse(
-        items=[ItemMasterResponse.from_entity(item) for item in items],
+    return ItemMasterEnrichedListResponse(
+        items=[ItemMasterEnrichedResponse.from_model_with_relations(item) for item in items],
         total=total_count,
         skip=skip,
         limit=limit
