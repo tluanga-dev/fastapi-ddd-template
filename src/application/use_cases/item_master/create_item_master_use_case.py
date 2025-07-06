@@ -3,15 +3,21 @@ from uuid import UUID
 
 from ....domain.entities.item_master import ItemMaster
 from ....domain.repositories.item_master_repository import ItemMasterRepository
+from ....domain.repositories.category_repository import CategoryRepository
 from ....domain.value_objects.item_type import ItemType
 
 
 class CreateItemMasterUseCase:
     """Use case for creating a new item master."""
     
-    def __init__(self, repository: ItemMasterRepository):
-        """Initialize use case with repository."""
+    def __init__(
+        self, 
+        repository: ItemMasterRepository,
+        category_repository: CategoryRepository
+    ):
+        """Initialize use case with repositories."""
         self.repository = repository
+        self.category_repository = category_repository
     
     async def execute(
         self,
@@ -28,6 +34,17 @@ class CreateItemMasterUseCase:
         # Check if item code already exists
         if await self.repository.exists_by_code(item_code):
             raise ValueError(f"Item with code '{item_code}' already exists")
+        
+        # Validate category exists and is a leaf category
+        category = await self.category_repository.get_by_id(category_id)
+        if not category:
+            raise ValueError(f"Category with ID '{category_id}' not found")
+        
+        if not category.can_have_products():
+            raise ValueError(
+                f"Products can only be assigned to leaf categories. "
+                f"'{category.category_name}' is a parent category with subcategories."
+            )
         
         # Create item master entity
         item = ItemMaster(

@@ -18,7 +18,9 @@ from ..schemas.sku_schemas import (
     SKURentalUpdate,
     SKUSaleUpdate,
     SKUResponse,
-    SKUListResponse
+    SKUListResponse,
+    SKUDropdownOption,
+    SKUDropdownResponse
 )
 from ..dependencies.database import get_db
 
@@ -333,5 +335,200 @@ async def get_saleable_skus(
         items=[SKUResponse.from_entity(sku) for sku in skus],
         total=total_count,
         skip=skip,
+        limit=limit
+    )
+
+
+@router.get("/dropdown", response_model=SKUDropdownResponse)
+async def get_sku_dropdown(
+    search: Optional[str] = Query(None, description="Search in code, name, barcode, or model"),
+    item_id: Optional[UUID] = Query(None, description="Filter by item"),
+    is_rentable: Optional[bool] = Query(None, description="Filter by rentable"),
+    is_saleable: Optional[bool] = Query(None, description="Filter by saleable"),
+    is_active: bool = Query(True, description="Include only active SKUs"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum results to return"),
+    repository: SQLAlchemySKURepository = Depends(get_sku_repository)
+):
+    """Get SKUs optimized for dropdown selection.
+    
+    Returns minimal data needed for dropdown display:
+    - id, sku_code, sku_name, item_id, barcode, model_number
+    - is_rentable, is_saleable, rental_base_price, sale_base_price
+    
+    Use this endpoint for:
+    - SKU selection dropdowns
+    - Search-as-you-type components
+    - Filtered SKU lists
+    """
+    use_case = ListSKUsUseCase(repository)
+    skus, total_count = await use_case.execute(
+        skip=0,
+        limit=limit,
+        item_id=item_id,
+        is_rentable=is_rentable,
+        is_saleable=is_saleable,
+        search=search,
+        is_active=is_active
+    )
+    
+    options = [
+        SKUDropdownOption(
+            id=sku.id,
+            sku_code=sku.sku_code,
+            sku_name=sku.sku_name,
+            item_id=sku.item_id,
+            barcode=sku.barcode,
+            model_number=sku.model_number,
+            is_rentable=sku.is_rentable,
+            is_saleable=sku.is_saleable,
+            rental_base_price=sku.rental_base_price,
+            sale_base_price=sku.sale_base_price
+        )
+        for sku in skus
+    ]
+    
+    return SKUDropdownResponse(
+        options=options,
+        total=total_count,
+        limit=limit
+    )
+
+
+@router.get("/item/{item_id}/dropdown", response_model=SKUDropdownResponse)
+async def get_sku_dropdown_by_item(
+    item_id: UUID,
+    search: Optional[str] = Query(None, description="Search in code, name, barcode, or model"),
+    is_rentable: Optional[bool] = Query(None, description="Filter by rentable"),
+    is_saleable: Optional[bool] = Query(None, description="Filter by saleable"),
+    is_active: bool = Query(True, description="Include only active SKUs"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum results to return"),
+    repository: SQLAlchemySKURepository = Depends(get_sku_repository)
+):
+    """Get SKUs for a specific item optimized for dropdown selection.
+    
+    Returns minimal data needed for dropdown display, filtered by item.
+    """
+    use_case = ListSKUsUseCase(repository)
+    skus, total_count = await use_case.execute(
+        skip=0,
+        limit=limit,
+        item_id=item_id,
+        is_rentable=is_rentable,
+        is_saleable=is_saleable,
+        search=search,
+        is_active=is_active
+    )
+    
+    options = [
+        SKUDropdownOption(
+            id=sku.id,
+            sku_code=sku.sku_code,
+            sku_name=sku.sku_name,
+            item_id=sku.item_id,
+            barcode=sku.barcode,
+            model_number=sku.model_number,
+            is_rentable=sku.is_rentable,
+            is_saleable=sku.is_saleable,
+            rental_base_price=sku.rental_base_price,
+            sale_base_price=sku.sale_base_price
+        )
+        for sku in skus
+    ]
+    
+    return SKUDropdownResponse(
+        options=options,
+        total=total_count,
+        limit=limit
+    )
+
+
+@router.get("/rentable/dropdown", response_model=SKUDropdownResponse)
+async def get_rentable_sku_dropdown(
+    search: Optional[str] = Query(None, description="Search in code, name, barcode, or model"),
+    item_id: Optional[UUID] = Query(None, description="Filter by item"),
+    is_active: bool = Query(True, description="Include only active SKUs"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum results to return"),
+    repository: SQLAlchemySKURepository = Depends(get_sku_repository)
+):
+    """Get rentable SKUs optimized for dropdown selection.
+    
+    Returns only SKUs where is_rentable=True.
+    """
+    use_case = ListSKUsUseCase(repository)
+    skus, total_count = await use_case.execute(
+        skip=0,
+        limit=limit,
+        item_id=item_id,
+        is_rentable=True,
+        is_saleable=None,
+        search=search,
+        is_active=is_active
+    )
+    
+    options = [
+        SKUDropdownOption(
+            id=sku.id,
+            sku_code=sku.sku_code,
+            sku_name=sku.sku_name,
+            item_id=sku.item_id,
+            barcode=sku.barcode,
+            model_number=sku.model_number,
+            is_rentable=sku.is_rentable,
+            is_saleable=sku.is_saleable,
+            rental_base_price=sku.rental_base_price,
+            sale_base_price=sku.sale_base_price
+        )
+        for sku in skus
+    ]
+    
+    return SKUDropdownResponse(
+        options=options,
+        total=total_count,
+        limit=limit
+    )
+
+
+@router.get("/saleable/dropdown", response_model=SKUDropdownResponse)
+async def get_saleable_sku_dropdown(
+    search: Optional[str] = Query(None, description="Search in code, name, barcode, or model"),
+    item_id: Optional[UUID] = Query(None, description="Filter by item"),
+    is_active: bool = Query(True, description="Include only active SKUs"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum results to return"),
+    repository: SQLAlchemySKURepository = Depends(get_sku_repository)
+):
+    """Get saleable SKUs optimized for dropdown selection.
+    
+    Returns only SKUs where is_saleable=True.
+    """
+    use_case = ListSKUsUseCase(repository)
+    skus, total_count = await use_case.execute(
+        skip=0,
+        limit=limit,
+        item_id=item_id,
+        is_rentable=None,
+        is_saleable=True,
+        search=search,
+        is_active=is_active
+    )
+    
+    options = [
+        SKUDropdownOption(
+            id=sku.id,
+            sku_code=sku.sku_code,
+            sku_name=sku.sku_name,
+            item_id=sku.item_id,
+            barcode=sku.barcode,
+            model_number=sku.model_number,
+            is_rentable=sku.is_rentable,
+            is_saleable=sku.is_saleable,
+            rental_base_price=sku.rental_base_price,
+            sale_base_price=sku.sale_base_price
+        )
+        for sku in skus
+    ]
+    
+    return SKUDropdownResponse(
+        options=options,
+        total=total_count,
         limit=limit
     )

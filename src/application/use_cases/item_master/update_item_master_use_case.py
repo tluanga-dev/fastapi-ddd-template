@@ -3,14 +3,20 @@ from uuid import UUID
 
 from ....domain.entities.item_master import ItemMaster
 from ....domain.repositories.item_master_repository import ItemMasterRepository
+from ....domain.repositories.category_repository import CategoryRepository
 
 
 class UpdateItemMasterUseCase:
     """Use case for updating item master."""
     
-    def __init__(self, repository: ItemMasterRepository):
-        """Initialize use case with repository."""
+    def __init__(
+        self, 
+        repository: ItemMasterRepository,
+        category_repository: CategoryRepository
+    ):
+        """Initialize use case with repositories."""
         self.repository = repository
+        self.category_repository = category_repository
     
     async def update_basic_info(
         self,
@@ -42,6 +48,17 @@ class UpdateItemMasterUseCase:
         item = await self.repository.get_by_id(item_id)
         if not item:
             raise ValueError(f"Item with id {item_id} not found")
+        
+        # Validate new category exists and is a leaf category
+        category = await self.category_repository.get_by_id(category_id)
+        if not category:
+            raise ValueError(f"Category with ID '{category_id}' not found")
+        
+        if not category.can_have_products():
+            raise ValueError(
+                f"Products can only be assigned to leaf categories. "
+                f"'{category.category_name}' is a parent category with subcategories."
+            )
         
         item.update_category(category_id, updated_by)
         

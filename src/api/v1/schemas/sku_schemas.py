@@ -124,3 +124,26 @@ class SKUListResponse(BaseModel):
     total: int
     skip: int
     limit: int
+
+
+class SKUDropdownOption(BaseModel):
+    """Minimal SKU data for dropdown selection."""
+    id: UUID
+    sku_code: str
+    sku_name: str
+    item_id: UUID
+    barcode: Optional[str] = None
+    model_number: Optional[str] = None
+    is_rentable: bool
+    is_saleable: bool
+    rental_base_price: Optional[Decimal] = None
+    sale_base_price: Optional[Decimal] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class SKUDropdownResponse(BaseModel):
+    """Response schema for SKU dropdown endpoint."""
+    options: List[SKUDropdownOption]
+    total: int
+    limit: int

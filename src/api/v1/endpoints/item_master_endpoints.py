@@ -11,13 +11,16 @@ from ....application.use_cases.item_master import (
     ListItemMastersUseCase
 )
 from ....infrastructure.repositories.item_master_repository import SQLAlchemyItemMasterRepository
+from ....infrastructure.repositories.category_repository_impl import SQLAlchemyCategoryRepository
 from ....domain.value_objects.item_type import ItemType
 from ..schemas.item_master_schemas import (
     ItemMasterCreate,
     ItemMasterUpdate,
     ItemMasterResponse,
     ItemMasterListResponse,
-    ItemMasterSerializationUpdate
+    ItemMasterSerializationUpdate,
+    ItemMasterDropdownOption,
+    ItemMasterDropdownResponse
 )
 from ..dependencies.database import get_db
 
@@ -29,14 +32,20 @@ async def get_item_master_repository(db: AsyncSession = Depends(get_db)) -> SQLA
     return SQLAlchemyItemMasterRepository(db)
 
 
+async def get_category_repository(db: AsyncSession = Depends(get_db)) -> SQLAlchemyCategoryRepository:
+    """Get category repository instance."""
+    return SQLAlchemyCategoryRepository(db)
+
+
 @router.post("/", response_model=ItemMasterResponse, status_code=status.HTTP_201_CREATED)
 async def create_item_master(
     item_data: ItemMasterCreate,
     repository: SQLAlchemyItemMasterRepository = Depends(get_item_master_repository),
+    category_repository: SQLAlchemyCategoryRepository = Depends(get_category_repository),
     current_user_id: Optional[str] = None  # TODO: Get from auth
 ):
     """Create a new item master."""
-    use_case = CreateItemMasterUseCase(repository)
+    use_case = CreateItemMasterUseCase(repository, category_repository)
     
     try:
         item = await use_case.execute(
@@ -131,10 +140,11 @@ async def update_item_master(
     item_id: UUID,
     item_data: ItemMasterUpdate,
     repository: SQLAlchemyItemMasterRepository = Depends(get_item_master_repository),
+    category_repository: SQLAlchemyCategoryRepository = Depends(get_category_repository),
     current_user_id: Optional[str] = None  # TODO: Get from auth
 ):
     """Update item master information."""
-    use_case = UpdateItemMasterUseCase(repository)
+    use_case = UpdateItemMasterUseCase(repository, category_repository)
     
     try:
         # Update basic info if provided
@@ -184,10 +194,11 @@ async def update_item_serialization(
     item_id: UUID,
     request: ItemMasterSerializationUpdate,
     repository: SQLAlchemyItemMasterRepository = Depends(get_item_master_repository),
+    category_repository: SQLAlchemyCategoryRepository = Depends(get_category_repository),
     current_user_id: Optional[str] = None  # TODO: Get from auth
 ):
     """Enable or disable serialization for an item."""
-    use_case = UpdateItemMasterUseCase(repository)
+    use_case = UpdateItemMasterUseCase(repository, category_repository)
     
     try:
         item = await use_case.toggle_serialization(
@@ -265,5 +276,58 @@ async def get_items_by_brand(
         items=[ItemMasterResponse.from_entity(item) for item in items],
         total=total_count,
         skip=skip,
+        limit=limit
+    )
+
+
+@router.get("/dropdown", response_model=ItemMasterDropdownResponse)
+async def get_item_master_dropdown(
+    search: Optional[str] = Query(None, description="Search in code, name, or description"),
+    category_id: Optional[UUID] = Query(None, description="Filter by category"),
+    brand_id: Optional[UUID] = Query(None, description="Filter by brand"),
+    item_type: Optional[ItemType] = Query(None, description="Filter by item type"),
+    is_serialized: Optional[bool] = Query(None, description="Filter by serialization"),
+    is_active: bool = Query(True, description="Include only active items"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum results to return"),
+    repository: SQLAlchemyItemMasterRepository = Depends(get_item_master_repository)
+):
+    """Get item masters optimized for dropdown selection.
+    
+    Returns minimal data needed for dropdown display:
+    - id, item_code, item_name, item_type, is_serialized
+    
+    Use this endpoint for:
+    - Item selection dropdowns
+    - Search-as-you-type components
+    - Filtered item lists
+    """
+    use_case = ListItemMastersUseCase(repository)
+    items, total_count = await use_case.execute(
+        skip=0,
+        limit=limit,
+        category_id=category_id,
+        brand_id=brand_id,
+        item_type=item_type,
+        is_serialized=is_serialized,
+        search=search,
+        is_active=is_active
+    )
+    
+    options = [
+        ItemMasterDropdownOption(
+            id=item.id,
+            item_code=item.item_code,
+            item_name=item.item_name,
+            item_type=item.item_type,
+            is_serialized=item.is_serialized,
+            category_id=item.category_id,
+            brand_id=item.brand_id
+        )
+        for item in items
+    ]
+    
+    return ItemMasterDropdownResponse(
+        options=options,
+        total=total_count,
         limit=limit
     )

@@ -79,3 +79,23 @@ class ItemTypeCount(BaseModel):
     """Schema for item type count."""
     item_type: ItemType
     count: int
+
+
+class ItemMasterDropdownOption(BaseModel):
+    """Minimal item master data for dropdown selection."""
+    id: UUID
+    item_code: str
+    item_name: str
+    item_type: ItemType
+    is_serialized: bool
+    category_id: UUID
+    brand_id: Optional[UUID] = None
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ItemMasterDropdownResponse(BaseModel):
+    """Response schema for item master dropdown endpoint."""
+    options: List[ItemMasterDropdownOption]
+    total: int
+    limit: int
