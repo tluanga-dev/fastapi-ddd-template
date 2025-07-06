@@ -1,7 +1,10 @@
 from typing import Optional, List
 from uuid import UUID
+import logging
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from ....application.use_cases.item_master import (
     CreateItemMasterUseCase,
@@ -66,6 +69,70 @@ async def create_item_master(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
+
+
+@router.get("/dropdown", response_model=ItemMasterDropdownResponse)
+async def get_item_master_dropdown(
+    search: Optional[str] = Query(None, description="Search in code, name, or description"),
+    category_id: Optional[UUID] = Query(None, description="Filter by category"),
+    brand_id: Optional[UUID] = Query(None, description="Filter by brand"),
+    item_type: Optional[ItemType] = Query(None, description="Filter by item type"),
+    is_serialized: Optional[bool] = Query(None, description="Filter by serialization"),
+    is_active: bool = Query(True, description="Include only active items"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum results to return"),
+    repository: SQLAlchemyItemMasterRepository = Depends(get_item_master_repository)
+):
+    """Get item masters optimized for dropdown selection.
+    
+    Returns minimal data needed for dropdown display:
+    - id, item_code, item_name, item_type, is_serialized
+    
+    Use this endpoint for:
+    - Item selection dropdowns
+    - Search-as-you-type components
+    - Filtered item lists
+    """
+    try:
+        use_case = ListItemMastersUseCase(repository)
+        items, total_count = await use_case.execute(
+            skip=0,
+            limit=limit,
+            category_id=category_id,
+            brand_id=brand_id,
+            item_type=item_type,
+            is_serialized=is_serialized,
+            search=search,
+            is_active=is_active
+        )
+        
+        options = []
+        for item in items:
+            try:
+                option = ItemMasterDropdownOption(
+                    id=item.id,
+                    item_code=item.item_code,
+                    item_name=item.item_name,
+                    item_type=item.item_type,
+                    is_serialized=item.is_serialized,
+                    category_id=item.category_id,
+                    brand_id=item.brand_id
+                )
+                options.append(option)
+            except Exception as option_error:
+                # Log problematic item but continue processing
+                logger.error(f"Failed to create dropdown option for item {item.id}: {option_error}")
+                logger.error(f"Item details: code={item.item_code}, name={item.item_name}, type={item.item_type}, category={item.category_id}")
+                continue
+        
+        return ItemMasterDropdownResponse(
+            options=options,
+            total=total_count,
+            limit=limit
+        )
+    except Exception as e:
+        logger.error(f"Error in get_item_master_dropdown: {e}")
+        logger.error(f"Request params: search={search}, category_id={category_id}, brand_id={brand_id}, item_type={item_type}, is_serialized={is_serialized}, is_active={is_active}, limit={limit}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @router.get("/{item_id}", response_model=ItemMasterResponse)
@@ -282,54 +349,3 @@ async def get_items_by_brand(
     )
 
 
-@router.get("/dropdown", response_model=ItemMasterDropdownResponse)
-async def get_item_master_dropdown(
-    search: Optional[str] = Query(None, description="Search in code, name, or description"),
-    category_id: Optional[UUID] = Query(None, description="Filter by category"),
-    brand_id: Optional[UUID] = Query(None, description="Filter by brand"),
-    item_type: Optional[ItemType] = Query(None, description="Filter by item type"),
-    is_serialized: Optional[bool] = Query(None, description="Filter by serialization"),
-    is_active: bool = Query(True, description="Include only active items"),
-    limit: int = Query(100, ge=1, le=500, description="Maximum results to return"),
-    repository: SQLAlchemyItemMasterRepository = Depends(get_item_master_repository)
-):
-    """Get item masters optimized for dropdown selection.
-    
-    Returns minimal data needed for dropdown display:
-    - id, item_code, item_name, item_type, is_serialized
-    
-    Use this endpoint for:
-    - Item selection dropdowns
-    - Search-as-you-type components
-    - Filtered item lists
-    """
-    use_case = ListItemMastersUseCase(repository)
-    items, total_count = await use_case.execute(
-        skip=0,
-        limit=limit,
-        category_id=category_id,
-        brand_id=brand_id,
-        item_type=item_type,
-        is_serialized=is_serialized,
-        search=search,
-        is_active=is_active
-    )
-    
-    options = [
-        ItemMasterDropdownOption(
-            id=item.id,
-            item_code=item.item_code,
-            item_name=item.item_name,
-            item_type=item.item_type,
-            is_serialized=item.is_serialized,
-            category_id=item.category_id,
-            brand_id=item.brand_id
-        )
-        for item in items
-    ]
-    
-    return ItemMasterDropdownResponse(
-        options=options,
-        total=total_count,
-        limit=limit
-    )

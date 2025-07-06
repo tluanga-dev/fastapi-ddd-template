@@ -15,6 +15,8 @@ from .transaction_line_model import TransactionLineModel
 from .rental_return_model import RentalReturnModel
 from .rental_return_line_model import RentalReturnLineModel
 from .inspection_report_model import InspectionReportModel
+from .unit_of_measurement_model import UnitOfMeasurementModel
+from .item_model import ItemModel
 
 __all__ = [
     "UserModel",
@@ -35,5 +37,7 @@ __all__ = [
     "TransactionLineModel",
     "RentalReturnModel",
     "RentalReturnLineModel",
-    "InspectionReportModel"
+    "InspectionReportModel",
+    "UnitOfMeasurementModel",
+    "ItemModel"
 ]
