@@ -12,7 +12,7 @@ class StockLevelModel(BaseModel):
     
     __tablename__ = "stock_levels"
     
-    sku_id = Column(UUID(), ForeignKey("skus.id"), nullable=False)
+    item_id = Column(UUID(), ForeignKey("items.id"), nullable=False)
     location_id = Column(UUID(), ForeignKey("locations.id"), nullable=False)
     quantity_on_hand = Column(Integer, nullable=False, default=0)
     quantity_available = Column(Integer, nullable=False, default=0)
@@ -24,19 +24,19 @@ class StockLevelModel(BaseModel):
     maximum_stock = Column(Integer, nullable=True)
     
     # Relationships
-    sku = relationship("SKUModel", back_populates="stock_levels")
+    item = relationship("ItemModel", back_populates="stock_levels")
     location = relationship("LocationModel", back_populates="stock_levels")
     
-    # Unique constraint for SKU + Location combination
+    # Unique constraint for Item + Location combination
     __table_args__ = (
-        UniqueConstraint('sku_id', 'location_id', name='uk_sku_location'),
+        UniqueConstraint('item_id', 'location_id', name='uk_item_location'),
     )
     
     def to_entity(self) -> StockLevel:
         """Convert SQLAlchemy model to domain entity."""
         return StockLevel(
             id=self.id,
-            sku_id=self.sku_id,
+            item_id=self.item_id,
             location_id=self.location_id,
             quantity_on_hand=self.quantity_on_hand,
             quantity_available=self.quantity_available,
@@ -58,7 +58,7 @@ class StockLevelModel(BaseModel):
         """Create SQLAlchemy model from domain entity."""
         return cls(
             id=entity.id if entity.id else uuid.uuid4(),
-            sku_id=entity.sku_id,
+            item_id=entity.item_id,
             location_id=entity.location_id,
             quantity_on_hand=entity.quantity_on_hand,
             quantity_available=entity.quantity_available,

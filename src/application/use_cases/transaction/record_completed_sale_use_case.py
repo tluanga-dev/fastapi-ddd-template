@@ -7,7 +7,7 @@ from ....domain.entities.transaction_header import TransactionHeader
 from ....domain.entities.transaction_line import TransactionLine
 from ....domain.repositories.customer_repository import CustomerRepository
 from ....domain.repositories.inventory_unit_repository import InventoryUnitRepository
-from ....domain.repositories.sku_repository import SKURepository
+from ....domain.repositories.item_repository import ItemRepository
 from ....domain.repositories.stock_level_repository import StockLevelRepository
 from ....domain.repositories.transaction_header_repository import (
     TransactionHeaderRepository,
@@ -31,7 +31,7 @@ class RecordCompletedSaleUseCase:
         self,
         transaction_repository: TransactionHeaderRepository,
         line_repository: TransactionLineRepository,
-        sku_repository: SKURepository,
+        item_repository: ItemRepository,
         customer_repository: CustomerRepository,
         inventory_repository: InventoryUnitRepository,
         stock_repository: StockLevelRepository,
@@ -39,7 +39,7 @@ class RecordCompletedSaleUseCase:
         """Initialize use case with repositories."""
         self.transaction_repository = transaction_repository
         self.line_repository = line_repository
-        self.sku_repository = sku_repository
+        self.item_repository = item_repository
         self.customer_repository = customer_repository
         self.inventory_repository = inventory_repository
         self.stock_repository = stock_repository
@@ -67,7 +67,7 @@ class RecordCompletedSaleUseCase:
         if not customer.is_active:
             raise ValueError("Cannot record sale for inactive customer")
 
-        # Validate stock availability for all items before processing
+        # Validate stock availability and items
         await self._validate_sale_items(items, location_id)
 
         # Generate sale transaction number
@@ -108,7 +108,7 @@ class RecordCompletedSaleUseCase:
         subtotal = Decimal("0.00")
 
         for item in items:
-            sku_id = item.get("sku_id")
+            item_id = item.get("item_id")
             quantity = Decimal(str(item.get("quantity", 1)))
             unit_price = Decimal(str(item.get("unit_price", 0)))
             discount_percentage = Decimal(str(item.get("discount_percentage", 0)))
@@ -116,13 +116,13 @@ class RecordCompletedSaleUseCase:
             condition_notes = item.get("condition_notes")
             item_notes = item.get("notes")
 
-            # Get SKU details
-            sku = await self.sku_repository.get_by_id(sku_id)
-            if not sku:
-                raise ValueError(f"SKU with id {sku_id} not found")
+            # Get Item details
+            item_entity = await self.item_repository.get_by_id(item_id)
+            if not item_entity:
+                raise ValueError(f"Item with id {item_id} not found")
 
             # Create line
-            description = f"{sku.sku_code} - {sku.sku_name}"
+            description = f"{item_entity.sku} - {item_entity.item_name}"
             if item_notes:
                 description += f" ({item_notes})"
 
@@ -130,7 +130,7 @@ class RecordCompletedSaleUseCase:
                 transaction_id=transaction.id,
                 line_number=line_number,
                 line_type=LineItemType.PRODUCT,
-                sku_id=sku_id,
+                item_id=item_id,
                 description=description,
                 quantity=quantity,
                 unit_price=unit_price,
@@ -145,9 +145,9 @@ class RecordCompletedSaleUseCase:
             lines.append(line)
             line_number += 1
 
-            # Process inventory immediately
+            # Process inventory for the sale
             await self._process_inventory_sale(
-                sku=sku,
+                item=item_entity,
                 quantity=quantity,
                 unit_price=unit_price,
                 location_id=location_id,
@@ -158,9 +158,9 @@ class RecordCompletedSaleUseCase:
                 created_by=created_by,
             )
 
-            # Update stock levels immediately
+            # Update stock levels
             await self._update_stock_levels(
-                sku_id=sku_id,
+                item_id=item_id,
                 location_id=location_id,
                 quantity_decrease=int(quantity),
                 updated_by=created_by,
@@ -221,39 +221,39 @@ class RecordCompletedSaleUseCase:
     async def _validate_sale_items(self, items: List[Dict], location_id: UUID):
         """Validate that all items can be sold (stock availability check)."""
         for item in items:
-            sku_id = item.get("sku_id")
+            item_id = item.get("item_id")
             quantity = Decimal(str(item.get("quantity", 1)))
             serial_numbers = item.get("serial_numbers", [])
 
-            # Validate SKU exists and is saleable
-            sku = await self.sku_repository.get_by_id(sku_id)
-            if not sku:
-                raise ValueError(f"SKU with id {sku_id} not found")
+            # Validate Item exists and is saleable
+            item_entity = await self.item_repository.get_by_id(item_id)
+            if not item_entity:
+                raise ValueError(f"Item with id {item_id} not found")
 
-            if not sku.is_active:
-                raise ValueError(f"SKU {sku.sku_code} is not active")
+            if not item_entity.is_active:
+                raise ValueError(f"Item {item_entity.sku} is not active")
 
-            if not sku.is_saleable:
-                raise ValueError(f"SKU {sku.sku_code} is not available for sale")
+            if not item_entity.is_saleable:
+                raise ValueError(f"Item {item_entity.sku} is not available for sale")
 
             # Check stock availability
             is_available, available_qty = (
                 await self.stock_repository.check_availability(
-                    sku_id=sku_id, quantity=int(quantity), location_id=location_id
+                    item_id=item_id, quantity=int(quantity), location_id=location_id
                 )
             )
 
             if not is_available:
                 raise ValueError(
-                    f"Insufficient stock for SKU {sku.sku_code}. "
+                    f"Insufficient stock for Item {item_entity.sku}. "
                     f"Requested: {quantity}, Available: {available_qty}"
                 )
 
             # For serialized items, validate serial numbers
-            if sku.is_serialized:
+            if item_entity.is_serialized:
                 if not serial_numbers:
                     raise ValueError(
-                        f"Serial numbers required for serialized SKU {sku.sku_code}"
+                        f"Serial numbers required for serialized Item {item_entity.sku}"
                     )
 
                 if len(serial_numbers) != int(quantity):
@@ -280,7 +280,7 @@ class RecordCompletedSaleUseCase:
 
     async def _process_inventory_sale(
         self,
-        sku,
+        item,
         quantity: Decimal,
         unit_price: Decimal,
         location_id: UUID,
@@ -292,27 +292,30 @@ class RecordCompletedSaleUseCase:
     ):
         """Process inventory for sold items."""
 
-        if sku.is_serialized:
+        if item.is_serialized:
             # Mark specific inventory units as sold
             for serial_number in serial_numbers:
                 inventory_unit = await self.inventory_repository.get_by_serial_number(
                     serial_number
                 )
                 if inventory_unit:
-                    inventory_unit.mark_as_sold(
-                        sale_date=sale_date,
-                        customer_id=customer_id,
-                        sale_price=unit_price,
-                        updated_by=created_by,
-                    )
+                    # For completed sales, we need to transition to RESERVED_SALE first, then SOLD
+                    if inventory_unit.current_status == InventoryStatus.AVAILABLE_SALE:
+                        if inventory_unit.can_transition_to(InventoryStatus.RESERVED_SALE):
+                            inventory_unit.update_status(InventoryStatus.RESERVED_SALE, created_by)
+                    
+                    # Now mark as sold
+                    inventory_unit.mark_as_sold(updated_by=created_by)
+                    
+                    # Add sale information to notes
+                    sale_note = f"\nSOLD: {sale_date} to customer {customer_id} for ${unit_price}"
                     if condition_notes:
-                        inventory_unit.notes = (
-                            f"{inventory_unit.notes}\nSale condition: {condition_notes}"
-                            if inventory_unit.notes
-                            else f"Sale condition: {condition_notes}"
-                        )
+                        sale_note += f"\nSale condition: {condition_notes}"
+                    
+                    current_notes = inventory_unit.notes or ""
+                    inventory_unit.notes = current_notes + sale_note
 
-                    await self.inventory_repository.update(inventory_unit)
+                    await self.inventory_repository.update(inventory_unit.id, inventory_unit)
         else:
             # For non-serialized items, inventory is managed through stock levels
             # No individual inventory units to mark as sold
@@ -320,7 +323,7 @@ class RecordCompletedSaleUseCase:
 
     async def _update_stock_levels(
         self,
-        sku_id: UUID,
+        item_id: UUID,
         location_id: UUID,
         quantity_decrease: int,
         updated_by: Optional[str] = None,
@@ -328,17 +331,17 @@ class RecordCompletedSaleUseCase:
         """Update stock levels for sold items."""
 
         # Get existing stock level
-        stock_level = await self.stock_repository.get_by_sku_location(
-            sku_id, location_id
+        stock_level = await self.stock_repository.get_by_item_location(
+            item_id, location_id
         )
 
         if stock_level:
-            # Confirm sale (this will decrease available quantities)
-            stock_level.confirm_sale(quantity_decrease, updated_by)
+            # Sell directly from available stock (for completed sales)
+            stock_level.sell_direct(quantity_decrease, updated_by)
             stock_level.last_updated = datetime.utcnow()
             await self.stock_repository.update(stock_level)
         else:
             # This should not happen if validation passed, but handle gracefully
             raise ValueError(
-                f"No stock level found for SKU {sku_id} at location {location_id}"
+                f"No stock level found for Item {item_id} at location {location_id}"
             )

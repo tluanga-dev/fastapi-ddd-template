@@ -14,11 +14,11 @@ from ....domain.value_objects.transaction_type import (
 class TransactionLineBase(BaseModel):
     """Base schema for transaction line."""
     line_type: LineItemType = Field(..., description="Type of line item")
-    sku_id: Optional[UUID] = Field(None, description="SKU ID for product/service lines")
+    item_id: Optional[UUID] = Field(None, description="Item ID for product/service lines")
     inventory_unit_id: Optional[UUID] = Field(None, description="Specific inventory unit ID")
     description: str = Field(..., description="Line item description")
     quantity: Decimal = Field(Decimal("1"), ge=0, description="Quantity")
-    unit_price: Optional[Decimal] = Field(None, ge=0, description="Unit price (uses SKU price if not provided)")
+    unit_price: Optional[Decimal] = Field(None, description="Unit price (uses SKU price if not provided, can be negative for discounts)")
     discount_percentage: Decimal = Field(Decimal("0"), ge=0, le=100, description="Discount percentage")
     discount_amount: Decimal = Field(Decimal("0"), ge=0, description="Discount amount")
     tax_rate: Decimal = Field(Decimal("0"), ge=0, description="Tax rate percentage")
@@ -60,6 +60,11 @@ class TransactionLineResponse(TransactionLineBase):
     created_at: datetime
     updated_at: datetime
     is_active: bool
+    # Enhanced item details
+    item_name: Optional[str] = None
+    item_sku: Optional[str] = None
+    item_category: Optional[str] = None
+    item_brand: Optional[str] = None
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -99,6 +104,41 @@ class TransactionHeaderUpdate(BaseModel):
     rental_end_date: Optional[date] = None
 
 
+class SupplierAddress(BaseModel):
+    """Supplier address information."""
+    street: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    country: Optional[str] = None
+    postal_code: Optional[str] = None
+
+
+class SupplierContact(BaseModel):
+    """Supplier contact information."""
+    contact_type: str
+    contact_value: str
+    contact_label: Optional[str] = None
+    is_primary: bool = False
+
+
+class SupplierSummary(BaseModel):
+    """Supplier summary for transaction responses."""
+    id: str
+    company_name: str
+    supplier_code: str
+    display_name: str
+    contact_person: Optional[str] = None
+    supplier_type: str
+    supplier_tier: str
+    is_active: bool
+    # Enhanced contact and address information
+    contacts: List[SupplierContact] = []
+    addresses: List[SupplierAddress] = []
+    primary_email: Optional[str] = None
+    primary_phone: Optional[str] = None
+
+
 class TransactionHeaderResponse(TransactionHeaderBase):
     """Schema for transaction header response."""
     id: UUID
@@ -114,6 +154,7 @@ class TransactionHeaderResponse(TransactionHeaderBase):
     paid_amount: Decimal
     deposit_amount: Decimal
     balance_due: Decimal = Field(..., description="Calculated balance due")
+    total_items: Optional[int] = Field(None, description="Total number of items in transaction")
     reference_transaction_id: Optional[UUID]
     rental_start_date: Optional[date]
     rental_end_date: Optional[date]
@@ -124,6 +165,7 @@ class TransactionHeaderResponse(TransactionHeaderBase):
     updated_at: datetime
     is_active: bool
     lines: Optional[List[TransactionLineResponse]] = None
+    supplier: Optional[SupplierSummary] = None
     
     model_config = ConfigDict(from_attributes=True)
 

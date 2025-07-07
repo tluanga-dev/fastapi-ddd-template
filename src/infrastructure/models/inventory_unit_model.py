@@ -16,7 +16,7 @@ class InventoryUnitModel(BaseModel):
     __tablename__ = "inventory_units"
     
     inventory_code = Column(String(50), unique=True, nullable=False, index=True)
-    sku_id = Column(UUID(), ForeignKey("skus.id"), nullable=False)
+    item_id = Column(UUID(), ForeignKey("items.id"), nullable=False)
     location_id = Column(UUID(), ForeignKey("locations.id"), nullable=False)
     serial_number = Column(String(100), unique=True, nullable=True, index=True)
     current_status = Column(Enum(InventoryStatus), nullable=False, default=InventoryStatus.AVAILABLE_SALE)
@@ -30,7 +30,7 @@ class InventoryUnitModel(BaseModel):
     notes = Column(Text, nullable=True)
     
     # Relationships
-    sku = relationship("SKUModel", back_populates="inventory_units")
+    item = relationship("ItemModel", back_populates="inventory_units")
     location = relationship("LocationModel", back_populates="inventory_units")
     
     def to_entity(self) -> InventoryUnit:
@@ -38,7 +38,7 @@ class InventoryUnitModel(BaseModel):
         return InventoryUnit(
             id=self.id,
             inventory_code=self.inventory_code,
-            sku_id=self.sku_id,
+            item_id=self.item_id,
             location_id=self.location_id,
             serial_number=self.serial_number,
             current_status=self.current_status,
@@ -63,7 +63,7 @@ class InventoryUnitModel(BaseModel):
         return cls(
             id=entity.id if entity.id else uuid.uuid4(),
             inventory_code=entity.inventory_code,
-            sku_id=entity.sku_id,
+            item_id=entity.item_id,
             location_id=entity.location_id,
             serial_number=entity.serial_number,
             current_status=entity.current_status,

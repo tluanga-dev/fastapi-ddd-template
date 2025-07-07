@@ -3,6 +3,8 @@ from uuid import UUID
 from datetime import datetime
 from decimal import Decimal
 from pydantic import BaseModel, Field, field_validator, model_validator
+from .category_schemas import CategoryResponse
+from .brand_schemas import BrandResponse
 
 
 class ItemBase(BaseModel):
@@ -148,9 +150,35 @@ class ItemResponse(ItemBase):
         from_attributes = True
 
 
+class ItemWithRelationsResponse(ItemBase):
+    """Schema for item response with related entities."""
+    id: UUID
+    item_id: UUID
+    created_at: datetime
+    updated_at: datetime
+    created_by: Optional[str] = None
+    updated_by: Optional[str] = None
+    is_active: bool
+    
+    # Related entities
+    category: Optional[CategoryResponse] = None
+    brand: Optional[BrandResponse] = None
+    
+    class Config:
+        from_attributes = True
+
+
 class ItemListResponse(BaseModel):
     """Schema for paginated item list response."""
     items: List[ItemResponse]
+    total: int
+    skip: int
+    limit: int
+
+
+class ItemListWithRelationsResponse(BaseModel):
+    """Schema for paginated item list response with related entities."""
+    items: List[ItemWithRelationsResponse]
     total: int
     skip: int
     limit: int

@@ -28,6 +28,12 @@ class ItemModel(BaseModel):
     rental_base_price = Column(DECIMAL(10, 2), nullable=True)
     sale_base_price = Column(DECIMAL(10, 2), nullable=True)
     
+    # Relationships
+    category = relationship("CategoryModel", foreign_keys=[category_id])
+    brand = relationship("BrandModel", foreign_keys=[brand_id])
+    inventory_units = relationship("InventoryUnitModel", back_populates="item")
+    stock_levels = relationship("StockLevelModel", back_populates="item")
+    
     # Create composite indexes for efficient searching
     __table_args__ = (
         Index('idx_item_name_active', 'item_name', 'is_active'),

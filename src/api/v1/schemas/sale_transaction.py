@@ -11,7 +11,7 @@ from .transaction import TransactionHeaderBase
 class CompletedSaleItemRecord(BaseModel):
     """Schema for recording a completed sale line item."""
 
-    sku_id: UUID = Field(..., description="SKU that was sold")
+    item_id: UUID = Field(..., description="Item that was sold")
     quantity: Decimal = Field(..., gt=0, description="Quantity sold")
     unit_price: Decimal = Field(..., ge=0, description="Sale price per unit")
     discount_percentage: Decimal = Field(

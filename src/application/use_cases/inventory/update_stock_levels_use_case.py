@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from ....domain.entities.stock_level import StockLevel
 from ....domain.repositories.stock_level_repository import StockLevelRepository
-from ....domain.repositories.sku_repository import SKURepository
+from ....domain.repositories.item_repository import ItemRepository
 from ....domain.repositories.location_repository import LocationRepository
 
 
@@ -14,17 +14,17 @@ class UpdateStockLevelsUseCase:
     def __init__(
         self,
         stock_repository: StockLevelRepository,
-        sku_repository: SKURepository,
+        item_repository: ItemRepository,
         location_repository: LocationRepository
     ):
         """Initialize use case with repositories."""
         self.stock_repository = stock_repository
-        self.sku_repository = sku_repository
+        self.item_repository = item_repository
         self.location_repository = location_repository
     
     async def execute(
         self,
-        sku_id: UUID,
+        item_id: UUID,
         location_id: UUID,
         operation: str,
         quantity: int,
@@ -32,10 +32,10 @@ class UpdateStockLevelsUseCase:
         updated_by: Optional[str] = None
     ) -> StockLevel:
         """Execute stock level update operation."""
-        # Verify SKU exists
-        sku = await self.sku_repository.get_by_id(sku_id)
-        if not sku:
-            raise ValueError(f"SKU with id {sku_id} not found")
+        # Verify Item exists
+        item = await self.item_repository.get_by_id(item_id)
+        if not item:
+            raise ValueError(f"Item with id {item_id} not found")
         
         # Verify location exists
         location = await self.location_repository.get_by_id(location_id)
@@ -43,7 +43,7 @@ class UpdateStockLevelsUseCase:
             raise ValueError(f"Location with id {location_id} not found")
         
         # Get or create stock level
-        stock_level = await self.stock_repository.get_or_create(sku_id, location_id)
+        stock_level = await self.stock_repository.get_or_create(item_id, location_id)
         
         # Perform operation
         if operation == "receive":
@@ -70,7 +70,7 @@ class UpdateStockLevelsUseCase:
     
     async def set_reorder_parameters(
         self,
-        sku_id: UUID,
+        item_id: UUID,
         location_id: UUID,
         reorder_point: int,
         reorder_quantity: int,
@@ -79,7 +79,7 @@ class UpdateStockLevelsUseCase:
     ) -> StockLevel:
         """Set reorder parameters for a SKU at a location."""
         # Get or create stock level
-        stock_level = await self.stock_repository.get_or_create(sku_id, location_id)
+        stock_level = await self.stock_repository.get_or_create(item_id, location_id)
         
         # Update reorder parameters
         stock_level.set_reorder_point(reorder_point, updated_by)
@@ -106,12 +106,12 @@ class UpdateStockLevelsUseCase:
         updated_stocks = []
         
         for item in items:
-            sku_id = item.get('sku_id')
+            item_id = item.get('item_id')
             quantity = item.get('quantity', 0)
             
             if quantity > 0:
                 stock_level = await self.execute(
-                    sku_id=sku_id,
+                    item_id=item_id,
                     location_id=location_id,
                     operation="receive",
                     quantity=quantity,
@@ -124,7 +124,7 @@ class UpdateStockLevelsUseCase:
     
     async def reconcile_stock(
         self,
-        sku_id: UUID,
+        item_id: UUID,
         location_id: UUID,
         physical_count: int,
         reason: str,
@@ -132,7 +132,7 @@ class UpdateStockLevelsUseCase:
     ) -> StockLevel:
         """Reconcile stock to match physical count."""
         # Get current stock level
-        stock_level = await self.stock_repository.get_or_create(sku_id, location_id)
+        stock_level = await self.stock_repository.get_or_create(item_id, location_id)
         
         # Calculate adjustment needed
         current_on_hand = stock_level.quantity_on_hand
@@ -175,13 +175,13 @@ class UpdateStockLevelsUseCase:
         
         report = []
         for stock_level in overstock_items:
-            sku = await self.sku_repository.get_by_id(stock_level.sku_id)
+            sku = await self.item_repository.get_by_id(stock_level.item_id)
             location = await self.location_repository.get_by_id(stock_level.location_id)
             
             overage = stock_level.quantity_on_hand - (stock_level.maximum_stock or 0)
             
             report.append({
-                'sku_id': str(stock_level.sku_id),
+                'item_id': str(stock_level.item_id),
                 'sku_code': sku.sku_code if sku else 'Unknown',
                 'sku_name': sku.sku_name if sku else 'Unknown',
                 'location_id': str(stock_level.location_id),

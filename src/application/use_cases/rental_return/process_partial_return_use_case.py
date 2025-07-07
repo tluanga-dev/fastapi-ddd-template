@@ -147,7 +147,7 @@ class ProcessPartialReturnUseCase:
             # Determine new inventory status based on condition
             if condition_grade == ConditionGrade.A:
                 # Excellent condition - available for rent/sale
-                if inventory_unit.sku_id:
+                if inventory_unit.item_id:
                     # Check what the item was originally available for
                     new_status = InventoryStatus.AVAILABLE_RENT  # Default to rent
                 else:
@@ -170,8 +170,8 @@ class ProcessPartialReturnUseCase:
             
             # Update stock levels if applicable
             try:
-                stock_level = await self.stock_repository.get_by_sku_location(
-                    inventory_unit.sku_id, 
+                stock_level = await self.stock_repository.get_by_item_location(
+                    inventory_unit.item_id, 
                     inventory_unit.location_id
                 )
                 if stock_level:

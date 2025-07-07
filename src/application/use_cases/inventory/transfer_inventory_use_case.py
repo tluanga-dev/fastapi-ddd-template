@@ -46,7 +46,7 @@ class TransferInventoryUseCase:
             InventoryStatus.AVAILABLE_SALE,
             InventoryStatus.AVAILABLE_RENT,
             InventoryStatus.DAMAGED,
-            InventoryStatus.REPAIR_NEEDED
+            InventoryStatus.REPAIR
         ]
         
         if inventory_unit.current_status not in transferable_statuses:
@@ -64,14 +64,14 @@ class TransferInventoryUseCase:
         
         # Update stock levels
         await self._update_stock_levels_for_transfer(
-            inventory_unit.sku_id,
+            inventory_unit.item_id,
             from_location_id,
             to_location_id,
             transferred_by
         )
         
         # Update inventory unit location
-        inventory_unit.transfer_location(to_location_id, transferred_by)
+        inventory_unit.update_location(to_location_id, transferred_by)
         
         # Add transfer notes
         timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
@@ -122,7 +122,7 @@ class TransferInventoryUseCase:
     
     async def transfer_by_sku(
         self,
-        sku_id: UUID,
+        item_id: UUID,
         from_location_id: UUID,
         to_location_id: UUID,
         quantity: int,
@@ -133,7 +133,7 @@ class TransferInventoryUseCase:
         """Transfer a quantity of items by SKU."""
         # Get available units at source location
         available_units = await self.inventory_repository.get_available_units(
-            sku_id=sku_id,
+            item_id=item_id,
             location_id=from_location_id,
             condition_grade=condition_grade
         )
@@ -161,7 +161,7 @@ class TransferInventoryUseCase:
     
     async def _update_stock_levels_for_transfer(
         self,
-        sku_id: UUID,
+        item_id: UUID,
         from_location_id: UUID,
         to_location_id: UUID,
         updated_by: Optional[str] = None
@@ -169,7 +169,7 @@ class TransferInventoryUseCase:
         """Update stock levels for both locations during transfer."""
         # Use the stock repository's transfer method
         await self.stock_repository.transfer_stock(
-            sku_id=sku_id,
+            item_id=item_id,
             from_location_id=from_location_id,
             to_location_id=to_location_id,
             quantity=1,

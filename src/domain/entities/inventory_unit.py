@@ -13,7 +13,7 @@ class InventoryUnit(BaseEntity):
     def __init__(
         self,
         inventory_code: str,
-        sku_id: UUID,
+        item_id: UUID,
         location_id: UUID,
         serial_number: Optional[str] = None,
         current_status: InventoryStatus = InventoryStatus.AVAILABLE_SALE,
@@ -42,7 +42,7 @@ class InventoryUnit(BaseEntity):
             updated_by=updated_by
         )
         self.inventory_code = inventory_code
-        self.sku_id = sku_id
+        self.item_id = item_id
         self.location_id = location_id
         self.serial_number = serial_number
         self.current_status = current_status
@@ -61,8 +61,8 @@ class InventoryUnit(BaseEntity):
         if not self.inventory_code or not self.inventory_code.strip():
             raise ValueError("Inventory code is required")
         
-        if not self.sku_id:
-            raise ValueError("SKU ID is required")
+        if not self.item_id:
+            raise ValueError("Item ID is required")
         
         if not self.location_id:
             raise ValueError("Location ID is required")

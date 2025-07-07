@@ -22,7 +22,7 @@ class CategoryModel(BaseModel):
     parent = relationship("CategoryModel", remote_side="CategoryModel.id", backref="children")
     
     # Items in this category
-    items = relationship("ItemMasterModel", back_populates="category")
+    items = relationship("ItemModel", back_populates="category")
     
     # Indexes for efficient queries
     __table_args__ = (

@@ -7,7 +7,7 @@ from ....domain.entities.transaction_header import TransactionHeader
 from ....domain.entities.transaction_line import TransactionLine
 from ....domain.repositories.transaction_header_repository import TransactionHeaderRepository
 from ....domain.repositories.transaction_line_repository import TransactionLineRepository
-from ....domain.repositories.sku_repository import SKURepository
+from ....domain.repositories.item_repository import ItemRepository
 from ....domain.repositories.inventory_unit_repository import InventoryUnitRepository
 from ....domain.repositories.customer_repository import CustomerRepository
 from ....domain.value_objects.transaction_type import (
@@ -23,14 +23,14 @@ class CreateRentalTransactionUseCase:
         self,
         transaction_repository: TransactionHeaderRepository,
         line_repository: TransactionLineRepository,
-        sku_repository: SKURepository,
+        item_repository: ItemRepository,
         inventory_repository: InventoryUnitRepository,
         customer_repository: CustomerRepository
     ):
         """Initialize use case with repositories."""
         self.transaction_repository = transaction_repository
         self.line_repository = line_repository
-        self.sku_repository = sku_repository
+        self.item_repository = item_repository
         self.inventory_repository = inventory_repository
         self.customer_repository = customer_repository
     
@@ -108,19 +108,19 @@ class CreateRentalTransactionUseCase:
         subtotal = Decimal("0.00")
         
         for item in items:
-            sku_id = item.get('sku_id')
+            item_id = item.get('item_id')
             quantity = Decimal(str(item.get('quantity', 1)))
             unit_price = item.get('unit_price')
             discount_percentage = Decimal(str(item.get('discount_percentage', 0)))
             specific_units = item.get('inventory_unit_ids', [])
             
-            # Validate SKU
-            sku = await self.sku_repository.get_by_id(sku_id)
-            if not sku:
-                raise ValueError(f"SKU with id {sku_id} not found")
+            # Validate Item
+            item_entity = await self.item_repository.get_by_id(item_id)
+            if not item_entity:
+                raise ValueError(f"Item with id {item_id} not found")
             
-            if not sku.is_rentable:
-                raise ValueError(f"SKU {sku.sku_code} is not available for rental")
+            if not item_entity.is_rentable:
+                raise ValueError(f"Item {item_entity.sku} is not available for rental")
             
             # Check availability for rental period
             if specific_units:
@@ -133,12 +133,12 @@ class CreateRentalTransactionUseCase:
                     if not unit.is_rentable:
                         raise ValueError(f"Unit {unit.inventory_code} is not available for rent")
                     
-                    if unit.sku_id != sku_id:
-                        raise ValueError(f"Unit {unit.inventory_code} does not match SKU")
+                    if unit.item_id != item_id:
+                        raise ValueError(f"Unit {unit.inventory_code} does not match Item")
             else:
                 # Check general availability
                 available_units = await self.inventory_repository.get_available_units(
-                    sku_id=sku_id,
+                    item_id=item_id,
                     location_id=location_id
                 )
                 
@@ -152,11 +152,11 @@ class CreateRentalTransactionUseCase:
             
             # Calculate rental price
             if unit_price is None:
-                # Use daily rate from SKU
-                if sku.rental_daily_rate:
-                    unit_price = sku.rental_daily_rate * rental_days
+                # Use daily rate from Item
+                if item_entity.rental_daily_rate:
+                    unit_price = item_entity.rental_daily_rate * rental_days
                 else:
-                    raise ValueError(f"No rental rate defined for SKU {sku.sku_code}")
+                    raise ValueError(f"No rental rate defined for Item {item_entity.sku}")
             else:
                 unit_price = Decimal(str(unit_price))
             
@@ -165,8 +165,8 @@ class CreateRentalTransactionUseCase:
                 transaction_id=transaction.id,
                 line_number=line_number,
                 line_type=LineItemType.PRODUCT,
-                sku_id=sku_id,
-                description=f"{sku.sku_code} - {sku.sku_name} (Rental: {rental_days} days)",
+                item_id=item_id,
+                description=f"{item_entity.sku} - {item_entity.item_name} (Rental: {rental_days} days)",
                 quantity=quantity,
                 unit_price=unit_price,
                 discount_percentage=discount_percentage,

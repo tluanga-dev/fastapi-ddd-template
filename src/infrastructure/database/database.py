@@ -23,7 +23,7 @@ async def get_session():
     async with async_session_maker() as session:
         try:
             yield session
-            await session.commit()
+            # Don't auto-commit - let endpoints manage transactions
         except Exception:
             await session.rollback()
             raise

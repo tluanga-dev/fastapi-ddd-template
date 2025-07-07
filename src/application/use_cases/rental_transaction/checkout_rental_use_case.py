@@ -94,12 +94,12 @@ class CheckoutRentalUseCase:
                 if unit:
                     inventory_updates.append(unit)
         
-        # If no specific units, get units by SKU
+        # If no specific units, get units by item
         if not inventory_updates:
             for line in lines:
-                if line.line_type == "PRODUCT" and line.sku_id:
+                if line.line_type == "PRODUCT" and line.item_id:
                     units = await self._get_reserved_units_for_transaction(
-                        transaction_id, line.sku_id, int(line.quantity)
+                        transaction_id, line.item_id, int(line.quantity)
                     )
                     inventory_updates.extend(units)
         
@@ -149,14 +149,14 @@ class CheckoutRentalUseCase:
     async def _get_reserved_units_for_transaction(
         self,
         transaction_id: UUID,
-        sku_id: UUID,
+        item_id: UUID,
         quantity: int
     ) -> List[InventoryUnit]:
         """Get inventory units reserved for this transaction."""
         # This would typically check a reservation table or notes
         # For now, we'll get units with RESERVED_RENT status at the location
-        units = await self.inventory_unit_repo.get_by_status_and_sku(
-            InventoryStatus.RESERVED_RENT, sku_id
+        units = await self.inventory_unit_repo.get_by_status_and_item(
+            InventoryStatus.RESERVED_RENT, item_id
         )
         
         # Filter units that mention this transaction in notes

@@ -86,8 +86,9 @@ class TransactionHeaderModel(BaseModel):
             is_active=self.is_active
         )
         
-        # Add lines if loaded
-        if self.lines:
+        # Add lines if loaded - check if lines attribute was loaded without triggering lazy load
+        # Use hasattr to check if the lines attribute has been loaded into the instance dict
+        if hasattr(self, '_sa_instance_state') and 'lines' in self.__dict__:
             transaction._lines = [line.to_entity() for line in self.lines]
         
         return transaction

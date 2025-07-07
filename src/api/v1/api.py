@@ -10,8 +10,6 @@ from src.api.v1.endpoints.customer_endpoints import router as customers_router
 from src.api.v1.endpoints.customer_analytics import router as customer_analytics_router
 from src.api.v1.endpoints.supplier_endpoints import router as suppliers_router
 from src.api.v1.endpoints.supplier_analytics import router as supplier_analytics_router
-from src.api.v1.endpoints.item_master_endpoints import router as item_masters_router
-from src.api.v1.endpoints.sku_endpoints import router as skus_router
 from src.api.v1.endpoints.inventory import router as inventory_router
 from src.api.v1.endpoints.transaction import router as transaction_router
 from src.api.v1.endpoints.rental_return import router as rental_return_router
@@ -32,8 +30,6 @@ api_router.include_router(customers_router, prefix="/customers", tags=["customer
 api_router.include_router(customer_analytics_router, tags=["customer-analytics"])
 api_router.include_router(suppliers_router, prefix="/suppliers", tags=["suppliers"])
 api_router.include_router(supplier_analytics_router, tags=["supplier-analytics"])
-api_router.include_router(item_masters_router, prefix="/item-masters", tags=["item-masters"])
-api_router.include_router(skus_router, prefix="/skus", tags=["skus"])
 api_router.include_router(inventory_router, tags=["inventory"])
 api_router.include_router(transaction_router, tags=["transactions"])
 api_router.include_router(rental_return_router, tags=["rental-returns"])

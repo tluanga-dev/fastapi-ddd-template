@@ -7,7 +7,7 @@ from ....domain.entities.rental_return import RentalReturn
 from ....domain.repositories.rental_return_repository import RentalReturnRepository
 from ....domain.repositories.rental_return_line_repository import RentalReturnLineRepository
 from ....domain.repositories.transaction_header_repository import TransactionHeaderRepository
-from ....domain.repositories.sku_repository import SKURepository
+from ....domain.repositories.item_repository import ItemRepository
 
 
 class CalculateLateFeeUseCase:
@@ -18,13 +18,13 @@ class CalculateLateFeeUseCase:
         return_repository: RentalReturnRepository,
         line_repository: RentalReturnLineRepository,
         transaction_repository: TransactionHeaderRepository,
-        sku_repository: SKURepository
+        item_repository: ItemRepository
     ):
         """Initialize use case with repositories."""
         self.return_repository = return_repository
         self.line_repository = line_repository
         self.transaction_repository = transaction_repository
-        self.sku_repository = sku_repository
+        self.item_repository = item_repository
     
     async def execute(
         self,

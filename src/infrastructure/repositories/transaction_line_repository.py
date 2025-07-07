@@ -24,7 +24,7 @@ class SQLAlchemyTransactionLineRepository(TransactionLineRepository):
         """Create a new transaction line."""
         db_line = TransactionLineModel.from_entity(transaction_line)
         self.session.add(db_line)
-        await self.session.commit()
+        await self.session.flush()  # Flush to get the ID, but don't commit
         await self.session.refresh(db_line)
         return db_line.to_entity()
     
@@ -32,7 +32,7 @@ class SQLAlchemyTransactionLineRepository(TransactionLineRepository):
         """Create multiple transaction lines in batch."""
         db_lines = [TransactionLineModel.from_entity(line) for line in transaction_lines]
         self.session.add_all(db_lines)
-        await self.session.commit()
+        await self.session.flush()  # Flush to get the IDs, but don't commit
         
         # Refresh all lines
         created_lines = []

@@ -89,9 +89,9 @@ class CancelTransactionUseCase:
                         await self.inventory_repository.update(unit)
                 
                 # Release stock reservations
-                elif line.sku_id and transaction.is_sale:
-                    stock_level = await self.stock_repository.get_by_sku_location(
-                        line.sku_id,
+                elif line.item_id and transaction.is_sale:
+                    stock_level = await self.stock_repository.get_by_item_location(
+                        line.item_id,
                         transaction.location_id
                     )
                     

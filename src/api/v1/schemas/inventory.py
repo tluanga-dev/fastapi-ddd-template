@@ -11,7 +11,7 @@ from ....domain.value_objects.item_type import InventoryStatus, ConditionGrade
 class InventoryUnitBase(BaseModel):
     """Base schema for inventory unit."""
     inventory_code: str = Field(..., description="Unique inventory code")
-    sku_id: UUID = Field(..., description="SKU ID")
+    item_id: UUID = Field(..., description="Item ID")
     location_id: UUID = Field(..., description="Location ID")
     serial_number: Optional[str] = Field(None, description="Serial number for serialized items")
     current_status: InventoryStatus = Field(InventoryStatus.AVAILABLE_SALE, description="Current status")
@@ -62,10 +62,10 @@ class InventoryUnitListResponse(BaseModel):
 # StockLevel Schemas
 class StockLevelBase(BaseModel):
     """Base schema for stock level."""
-    sku_id: UUID = Field(..., description="SKU ID")
+    item_id: UUID = Field(..., description="Item ID")
     location_id: UUID = Field(..., description="Location ID")
     reorder_point: int = Field(0, ge=0, description="Reorder point")
-    reorder_quantity: int = Field(1, ge=1, description="Reorder quantity")
+    reorder_quantity: int = Field(0, ge=0, description="Reorder quantity")
     maximum_stock: Optional[int] = Field(None, ge=0, description="Maximum stock level")
 
 
@@ -135,8 +135,8 @@ class BulkInventoryTransfer(BaseModel):
 
 
 class SkuInventoryTransfer(BaseModel):
-    """Schema for transferring inventory by SKU."""
-    sku_id: UUID
+    """Schema for transferring inventory by Item."""
+    item_id: UUID
     from_location_id: UUID
     to_location_id: UUID
     quantity: int = Field(..., ge=1)
@@ -159,7 +159,7 @@ class StockReconciliation(BaseModel):
 
 class BulkReceiveItem(BaseModel):
     """Schema for bulk receive item."""
-    sku_id: UUID
+    item_id: UUID
     quantity: int = Field(..., ge=1)
 
 
@@ -171,7 +171,7 @@ class BulkReceive(BaseModel):
 
 class StockAvailabilityQuery(BaseModel):
     """Schema for checking stock availability."""
-    sku_id: UUID
+    item_id: UUID
     quantity: int = Field(..., ge=1)
     location_id: Optional[UUID] = None
     for_sale: bool = Field(True, description="Check for sale (True) or rent (False)")
@@ -179,8 +179,8 @@ class StockAvailabilityQuery(BaseModel):
 
 
 class MultiSkuAvailabilityQuery(BaseModel):
-    """Schema for checking multiple SKU availability."""
-    items: List[dict] = Field(..., description="List of items with sku_id, quantity, and optional min_condition_grade")
+    """Schema for checking multiple Item availability."""
+    items: List[dict] = Field(..., description="List of items with item_id, quantity, and optional min_condition_grade")
     location_id: Optional[UUID] = None
     for_sale: bool = True
 
@@ -199,9 +199,9 @@ class StockAvailabilityResponse(BaseModel):
 
 class LowStockAlert(BaseModel):
     """Schema for low stock alert."""
-    sku_id: str
-    sku_code: str
-    sku_name: str
+    item_id: str
+    sku: str
+    item_name: str
     location_id: str
     location_name: str
     quantity_available: int
@@ -212,7 +212,7 @@ class LowStockAlert(BaseModel):
 
 class OverstockReport(BaseModel):
     """Schema for overstock report item."""
-    sku_id: str
+    item_id: str
     sku_code: str
     sku_name: str
     location_id: str
@@ -225,7 +225,7 @@ class OverstockReport(BaseModel):
 
 class StockValuation(BaseModel):
     """Schema for stock valuation summary."""
-    total_skus: int
+    total_items: int
     total_units: int
     total_available: int
     total_damaged: int

@@ -178,9 +178,9 @@ class FinalizeReturnUseCase:
                 await self.inventory_repository.update(inventory_unit)
                 
                 # Update stock levels
-                if inventory_unit.sku_id and inventory_unit.location_id:
-                    stock_level = await self.stock_repository.get_by_sku_location(
-                        inventory_unit.sku_id,
+                if inventory_unit.item_id and inventory_unit.location_id:
+                    stock_level = await self.stock_repository.get_by_item_location(
+                        inventory_unit.item_id,
                         inventory_unit.location_id
                     )
                     if stock_level:

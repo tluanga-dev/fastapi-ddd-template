@@ -3,7 +3,7 @@ from uuid import UUID
 
 from ....domain.repositories.inventory_unit_repository import InventoryUnitRepository
 from ....domain.repositories.stock_level_repository import StockLevelRepository
-from ....domain.repositories.sku_repository import SKURepository
+from ....domain.repositories.item_repository import ItemRepository
 from ....domain.repositories.location_repository import LocationRepository
 from ....domain.value_objects.item_type import InventoryStatus, ConditionGrade
 
@@ -15,35 +15,35 @@ class CheckStockAvailabilityUseCase:
         self,
         inventory_repository: InventoryUnitRepository,
         stock_repository: StockLevelRepository,
-        sku_repository: SKURepository,
+        item_repository: ItemRepository,
         location_repository: LocationRepository
     ):
         """Initialize use case with repositories."""
         self.inventory_repository = inventory_repository
         self.stock_repository = stock_repository
-        self.sku_repository = sku_repository
+        self.item_repository = item_repository
         self.location_repository = location_repository
     
     async def execute(
         self,
-        sku_id: UUID,
+        item_id: UUID,
         quantity: int,
         location_id: Optional[UUID] = None,
         for_sale: bool = True,
         min_condition_grade: Optional[ConditionGrade] = None
     ) -> Dict:
         """Check if requested quantity is available."""
-        # Verify SKU exists
-        sku = await self.sku_repository.get_by_id(sku_id)
-        if not sku:
-            raise ValueError(f"SKU with id {sku_id} not found")
+        # Verify Item exists
+        item = await self.item_repository.get_by_id(item_id)
+        if not item:
+            raise ValueError(f"Item with id {item_id} not found")
         
-        # Check if SKU supports requested operation
-        if for_sale and not sku.is_saleable:
-            raise ValueError(f"SKU {sku.sku_code} is not available for sale")
+        # Check if Item supports requested operation
+        if for_sale and not item.is_saleable:
+            raise ValueError(f"Item {item.sku} is not available for sale")
         
-        if not for_sale and not sku.is_rentable:
-            raise ValueError(f"SKU {sku.sku_code} is not available for rent")
+        if not for_sale and not item.is_rentable:
+            raise ValueError(f"Item {item.sku} is not available for rent")
         
         # Determine target status
         target_status = InventoryStatus.AVAILABLE_SALE if for_sale else InventoryStatus.AVAILABLE_RENT
@@ -56,41 +56,41 @@ class CheckStockAvailabilityUseCase:
                 raise ValueError(f"Location with id {location_id} not found")
             
             availability = await self._check_location_availability(
-                sku_id, location_id, quantity, target_status, min_condition_grade
+                item_id, location_id, quantity, target_status, min_condition_grade
             )
         else:
             # Check across all locations
             availability = await self._check_global_availability(
-                sku_id, quantity, target_status, min_condition_grade
+                item_id, quantity, target_status, min_condition_grade
             )
         
         return availability
     
-    async def check_multiple_skus(
+    async def check_multiple_items(
         self,
         items: List[Dict[str, any]],
         location_id: Optional[UUID] = None,
         for_sale: bool = True
     ) -> Dict[str, Dict]:
-        """Check availability for multiple SKUs at once."""
+        """Check availability for multiple Items at once."""
         results = {}
         
         for item in items:
-            sku_id = item.get('sku_id')
+            item_id = item.get('item_id')
             quantity = item.get('quantity', 1)
             min_condition = item.get('min_condition_grade')
             
             try:
                 availability = await self.execute(
-                    sku_id=sku_id,
+                    item_id=item_id,
                     quantity=quantity,
                     location_id=location_id,
                     for_sale=for_sale,
                     min_condition_grade=min_condition
                 )
-                results[str(sku_id)] = availability
+                results[str(item_id)] = availability
             except ValueError as e:
-                results[str(sku_id)] = {
+                results[str(item_id)] = {
                     'available': False,
                     'error': str(e)
                 }
@@ -99,7 +99,7 @@ class CheckStockAvailabilityUseCase:
     
     async def _check_location_availability(
         self,
-        sku_id: UUID,
+        item_id: UUID,
         location_id: UUID,
         quantity: int,
         target_status: InventoryStatus,
@@ -107,7 +107,7 @@ class CheckStockAvailabilityUseCase:
     ) -> Dict:
         """Check availability at a specific location."""
         # Get stock level
-        stock_level = await self.stock_repository.get_by_sku_location(sku_id, location_id)
+        stock_level = await self.stock_repository.get_by_item_location(item_id, location_id)
         
         if not stock_level:
             return {
@@ -121,7 +121,7 @@ class CheckStockAvailabilityUseCase:
         
         # Get available units
         available_units = await self.inventory_repository.get_available_units(
-            sku_id=sku_id,
+            item_id=item_id,
             location_id=location_id,
             condition_grade=min_condition_grade
         )
@@ -158,27 +158,27 @@ class CheckStockAvailabilityUseCase:
     
     async def _check_global_availability(
         self,
-        sku_id: UUID,
+        item_id: UUID,
         quantity: int,
         target_status: InventoryStatus,
         min_condition_grade: Optional[ConditionGrade] = None
     ) -> Dict:
         """Check availability across all locations."""
         # Get total stock
-        total_stock = await self.stock_repository.get_total_stock_by_sku(sku_id)
+        total_stock = await self.stock_repository.get_total_stock_by_item(item_id)
         
         # Get all locations with stock
         locations_with_stock = []
         total_available = 0
         
-        # Get all stock levels for this SKU
-        stock_levels, _ = await self.stock_repository.list(sku_id=sku_id)
+        # Get all stock levels for this Item
+        stock_levels, _ = await self.stock_repository.list(item_id=item_id)
         
         for stock_level in stock_levels:
             if stock_level.quantity_available > 0:
                 # Get available units at this location
                 available_units = await self.inventory_repository.get_available_units(
-                    sku_id=sku_id,
+                    item_id=item_id,
                     location_id=stock_level.location_id,
                     condition_grade=min_condition_grade
                 )
@@ -229,13 +229,13 @@ class CheckStockAvailabilityUseCase:
         
         alerts = []
         for stock_level in low_stock_items:
-            sku = await self.sku_repository.get_by_id(stock_level.sku_id)
+            item = await self.item_repository.get_by_id(stock_level.item_id)
             location = await self.location_repository.get_by_id(stock_level.location_id)
             
             alerts.append({
-                'sku_id': str(stock_level.sku_id),
-                'sku_code': sku.sku_code if sku else 'Unknown',
-                'sku_name': sku.sku_name if sku else 'Unknown',
+                'item_id': str(stock_level.item_id),
+                'sku': item.sku if item else 'Unknown',
+                'item_name': item.item_name if item else 'Unknown',
                 'location_id': str(stock_level.location_id),
                 'location_name': location.location_name if location else 'Unknown',
                 'quantity_available': stock_level.quantity_available,

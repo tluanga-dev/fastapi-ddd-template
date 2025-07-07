@@ -36,8 +36,8 @@ from ....infrastructure.repositories.customer_repository import (
 from ....infrastructure.repositories.inventory_unit_repository import (
     SQLAlchemyInventoryUnitRepository
 )
-from ....infrastructure.repositories.sku_repository import (
-    SQLAlchemySKURepository
+from ....infrastructure.repositories.item_repository import (
+    ItemRepositoryImpl
 )
 from ....infrastructure.repositories.stock_level_repository import (
     SQLAlchemyStockLevelRepository
@@ -86,7 +86,7 @@ async def create_rental_booking(
     transaction_line_repo = SQLAlchemyTransactionLineRepository(db)
     customer_repo = SQLAlchemyCustomerRepository(db)
     inventory_unit_repo = SQLAlchemyInventoryUnitRepository(db)
-    sku_repo = SQLAlchemySKURepository(db)
+    item_repo = ItemRepositoryImpl(db)
     stock_level_repo = SQLAlchemyStockLevelRepository(db)
     
     # Initialize use case
@@ -95,7 +95,7 @@ async def create_rental_booking(
         transaction_line_repo=transaction_line_repo,
         customer_repo=customer_repo,
         inventory_unit_repo=inventory_unit_repo,
-        sku_repo=sku_repo,
+        item_repo=item_repo,
         stock_level_repo=stock_level_repo
     )
     
@@ -103,7 +103,7 @@ async def create_rental_booking(
         # Convert request items to use case DTOs
         booking_items = [
             RentalBookingItem(
-                sku_id=item.sku_id,
+                item_id=item.item_id,
                 quantity=item.quantity,
                 rental_start_date=item.rental_start_date,
                 rental_end_date=item.rental_end_date,
@@ -367,14 +367,14 @@ async def extend_rental_period(
     transaction_repo = SQLAlchemyTransactionHeaderRepository(db)
     transaction_line_repo = SQLAlchemyTransactionLineRepository(db)
     inventory_unit_repo = SQLAlchemyInventoryUnitRepository(db)
-    sku_repo = SQLAlchemySKURepository(db)
+    item_repo = ItemRepositoryImpl(db)
     
     # Initialize use case
     use_case = ExtendRentalPeriodUseCase(
         transaction_repo=transaction_repo,
         transaction_line_repo=transaction_line_repo,
         inventory_unit_repo=inventory_unit_repo,
-        sku_repo=sku_repo
+        item_repo=item_repo
     )
     
     try:
@@ -534,7 +534,7 @@ async def check_rental_availability(
     try:
         # Get all units for SKU at location
         all_units = await inventory_unit_repo.get_by_sku_and_location(
-            request.sku_id, request.location_id
+            request.item_id, request.location_id
         )
         
         # Filter available units
@@ -570,7 +570,7 @@ async def check_rental_availability(
                 })
         
         return RentalAvailabilityResponse(
-            sku_id=request.sku_id,
+            item_id=request.item_id,
             location_id=request.location_id,
             rental_period={
                 "start": request.rental_start_date,

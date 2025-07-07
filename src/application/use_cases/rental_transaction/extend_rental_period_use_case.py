@@ -11,7 +11,7 @@ from ....domain.value_objects.transaction_type import (
 from ....domain.repositories.transaction_header_repository import TransactionHeaderRepository
 from ....domain.repositories.transaction_line_repository import TransactionLineRepository
 from ....domain.repositories.inventory_unit_repository import InventoryUnitRepository
-from ....domain.repositories.sku_repository import SKURepository
+from ....domain.repositories.item_repository import ItemRepository
 
 
 class ExtendRentalPeriodUseCase:
@@ -22,12 +22,12 @@ class ExtendRentalPeriodUseCase:
         transaction_repo: TransactionHeaderRepository,
         transaction_line_repo: TransactionLineRepository,
         inventory_unit_repo: InventoryUnitRepository,
-        sku_repo: SKURepository
+        item_repo: ItemRepository
     ):
         self.transaction_repo = transaction_repo
         self.transaction_line_repo = transaction_line_repo
         self.inventory_unit_repo = inventory_unit_repo
-        self.sku_repo = sku_repo
+        self.item_repo = item_repo
     
     async def execute(
         self,
@@ -111,7 +111,7 @@ class ExtendRentalPeriodUseCase:
                     transaction_id=transaction_id,
                     line_number=current_line_number,
                     line_type=LineItemType.SERVICE,  # Extension as service
-                    sku_id=line.sku_id,
+                    item_id=line.item_id,
                     description=f"Rental Extension: {line.description} ({extension_days} days)",
                     quantity=Decimal(str(extension_days)),
                     unit_price=daily_rate,

@@ -9,7 +9,7 @@ from ....domain.entities.transaction_header import TransactionHeader
 from ....domain.entities.transaction_line import TransactionLine
 from ....domain.repositories.customer_repository import CustomerRepository
 from ....domain.repositories.inventory_unit_repository import InventoryUnitRepository
-from ....domain.repositories.sku_repository import SKURepository
+from ....domain.repositories.item_repository import ItemRepository
 from ....domain.repositories.stock_level_repository import StockLevelRepository
 from ....domain.repositories.transaction_header_repository import (
     TransactionHeaderRepository,
@@ -33,7 +33,7 @@ class RecordCompletedSaleReturnUseCase:
         self,
         transaction_repository: TransactionHeaderRepository,
         line_repository: TransactionLineRepository,
-        sku_repository: SKURepository,
+        item_repository: ItemRepository,
         customer_repository: CustomerRepository,
         inventory_repository: InventoryUnitRepository,
         stock_repository: StockLevelRepository,
@@ -41,7 +41,7 @@ class RecordCompletedSaleReturnUseCase:
         """Initialize use case with repositories."""
         self.transaction_repository = transaction_repository
         self.line_repository = line_repository
-        self.sku_repository = sku_repository
+        self.item_repository = item_repository
         self.customer_repository = customer_repository
         self.inventory_repository = inventory_repository
         self.stock_repository = stock_repository
@@ -127,7 +127,7 @@ class RecordCompletedSaleReturnUseCase:
         total_return_amount = Decimal("0.00")
 
         for item in items:
-            sku_id = item.get("sku_id")
+            item_id = item.get("item_id")
             quantity = Decimal(str(item.get("quantity", 1)))
             unit_price = Decimal(str(item.get("unit_price", 0)))
             serial_numbers = item.get("serial_numbers", [])
@@ -135,13 +135,13 @@ class RecordCompletedSaleReturnUseCase:
             item_notes = item.get("notes")
             item_return_reason = item.get("return_reason")
 
-            # Get SKU details
-            sku = await self.sku_repository.get_by_id(sku_id)
-            if not sku:
-                raise ValueError(f"SKU with id {sku_id} not found")
+            # Get Item details
+            item_obj = await self.item_repository.get_by_id(item_id)
+            if not item_obj:
+                raise ValueError(f"Item with id {item_id} not found")
 
             # Create line
-            description = f"RETURN: {sku.sku_code} - {sku.sku_name}"
+            description = f"RETURN: {item_obj.item_code} - {item_obj.item_name}"
             if item_return_reason:
                 description += f" (Reason: {item_return_reason})"
             if item_notes:
@@ -152,7 +152,7 @@ class RecordCompletedSaleReturnUseCase:
                 transaction_id=transaction.id,
                 line_number=line_number,
                 line_type=LineItemType.PRODUCT,
-                sku_id=sku_id,
+                item_id=item_id,
                 description=description,
                 quantity=quantity,
                 unit_price=-unit_price,  # Negative for return
@@ -169,7 +169,7 @@ class RecordCompletedSaleReturnUseCase:
 
             # Process inventory return immediately
             await self._process_inventory_return(
-                sku=sku,
+                item=item_obj,
                 quantity=quantity,
                 unit_price=unit_price,
                 location_id=location_id,
@@ -181,7 +181,7 @@ class RecordCompletedSaleReturnUseCase:
 
             # Update stock levels immediately (reverse sale)
             await self._update_stock_levels_for_return(
-                sku_id=sku_id,
+                item_id=item_id,
                 location_id=location_id,
                 quantity_increase=int(quantity),
                 updated_by=created_by,
@@ -243,39 +243,39 @@ class RecordCompletedSaleReturnUseCase:
             line for line in original_lines if line.line_type == LineItemType.PRODUCT
         ]
 
-        # Create mapping of SKU to sold quantities
+        # Create mapping of Item to sold quantities
         sold_quantities = {}
         for line in original_product_lines:
-            if line.sku_id:
-                sold_quantities[line.sku_id] = (
-                    sold_quantities.get(line.sku_id, 0) + line.quantity
+            if line.item_id:
+                sold_quantities[line.item_id] = (
+                    sold_quantities.get(line.item_id, 0) + line.quantity
                 )
 
         # Validate each return item
         for item in items:
-            sku_id = item.get("sku_id")
+            item_id = item.get("item_id")
             quantity = Decimal(str(item.get("quantity", 1)))
             serial_numbers = item.get("serial_numbers", [])
 
-            if sku_id not in sold_quantities:
-                sku = await self.sku_repository.get_by_id(sku_id)
-                sku_name = sku.sku_code if sku else str(sku_id)
-                raise ValueError(f"SKU {sku_name} was not part of the original sale")
+            if item_id not in sold_quantities:
+                item_obj = await self.item_repository.get_by_id(item_id)
+                item_name = item_obj.item_code if item_obj else str(item_id)
+                raise ValueError(f"Item {item_name} was not part of the original sale")
 
-            if quantity > sold_quantities[sku_id]:
-                sku = await self.sku_repository.get_by_id(sku_id)
-                sku_name = sku.sku_code if sku else str(sku_id)
+            if quantity > sold_quantities[item_id]:
+                item_obj = await self.item_repository.get_by_id(item_id)
+                item_name = item_obj.item_code if item_obj else str(item_id)
                 raise ValueError(
-                    f"Cannot return {quantity} units of {sku_name}. "
-                    f"Only {sold_quantities[sku_id]} were sold"
+                    f"Cannot return {quantity} units of {item_name}. "
+                    f"Only {sold_quantities[item_id]} were sold"
                 )
 
             # For serialized items, validate serial numbers
-            sku = await self.sku_repository.get_by_id(sku_id)
-            if sku and sku.is_serialized:
+            item_obj = await self.item_repository.get_by_id(item_id)
+            if item_obj and item_obj.is_serialized:
                 if not serial_numbers:
                     raise ValueError(
-                        f"Serial numbers required for serialized SKU {sku.sku_code}"
+                        f"Serial numbers required for serialized Item {item_obj.item_code}"
                     )
 
                 if len(serial_numbers) != int(quantity):
@@ -303,7 +303,7 @@ class RecordCompletedSaleReturnUseCase:
 
     async def _process_inventory_return(
         self,
-        sku,
+        item,
         quantity: Decimal,
         unit_price: Decimal,
         location_id: UUID,
@@ -314,7 +314,7 @@ class RecordCompletedSaleReturnUseCase:
     ):
         """Process inventory for returned items (add back to inventory)."""
 
-        if sku.is_serialized:
+        if item.is_serialized:
             # Restore specific inventory units (customer returning items)
             for serial_number in serial_numbers:
                 inventory_unit = await self.inventory_repository.get_by_serial_number(
@@ -324,7 +324,7 @@ class RecordCompletedSaleReturnUseCase:
                     # Restore to available status
                     inventory_unit.current_status = (
                         InventoryStatus.AVAILABLE_SALE
-                        if sku.is_saleable
+                        if item.is_saleable
                         else InventoryStatus.AVAILABLE_RENT
                     )
                     inventory_unit.return_date = return_date
@@ -347,7 +347,7 @@ class RecordCompletedSaleReturnUseCase:
 
     async def _update_stock_levels_for_return(
         self,
-        sku_id: UUID,
+        item_id: UUID,
         location_id: UUID,
         quantity_increase: int,
         updated_by: Optional[str] = None,
@@ -355,8 +355,8 @@ class RecordCompletedSaleReturnUseCase:
         """Update stock levels for sale return (increase quantities)."""
 
         # Get existing stock level
-        stock_level = await self.stock_repository.get_by_sku_location(
-            sku_id, location_id
+        stock_level = await self.stock_repository.get_by_item_location(
+            item_id, location_id
         )
 
         if stock_level:
@@ -367,5 +367,5 @@ class RecordCompletedSaleReturnUseCase:
         else:
             # This should not happen if validation passed, but handle gracefully
             raise ValueError(
-                f"No stock level found for SKU {sku_id} at location {location_id}"
+                f"No stock level found for Item {item_id} at location {location_id}"
             )

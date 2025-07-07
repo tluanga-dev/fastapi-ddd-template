@@ -15,7 +15,7 @@ class TransactionLine(BaseEntity):
         transaction_id: UUID,
         line_number: int,
         line_type: LineItemType,
-        sku_id: Optional[UUID] = None,
+        item_id: Optional[UUID] = None,
         inventory_unit_id: Optional[UUID] = None,
         description: str = "",
         quantity: Decimal = Decimal("1"),
@@ -51,7 +51,7 @@ class TransactionLine(BaseEntity):
         self.transaction_id = transaction_id
         self.line_number = line_number
         self.line_type = line_type
-        self.sku_id = sku_id
+        self.item_id = item_id
         self.inventory_unit_id = inventory_unit_id
         self.description = description
         self.quantity = quantity
@@ -88,7 +88,8 @@ class TransactionLine(BaseEntity):
         if self.quantity < 0:
             raise ValueError("Quantity cannot be negative")
         
-        if self.unit_price < 0:
+        # Allow negative unit prices for discount lines
+        if self.unit_price < 0 and self.line_type != LineItemType.DISCOUNT:
             raise ValueError("Unit price cannot be negative")
         
         if self.discount_percentage < 0 or self.discount_percentage > 100:
@@ -111,8 +112,8 @@ class TransactionLine(BaseEntity):
         
         # Validate product/service lines have SKU
         if self.line_type in [LineItemType.PRODUCT, LineItemType.SERVICE]:
-            if not self.sku_id:
-                raise ValueError(f"SKU ID is required for {self.line_type.value} lines")
+            if not self.item_id:
+                raise ValueError(f"Item ID is required for {self.line_type.value} lines")
         
         # Validate rental information
         if self.rental_period_value is not None:

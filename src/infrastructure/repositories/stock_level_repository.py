@@ -19,7 +19,7 @@ class SQLAlchemyStockLevelRepository(StockLevelRepository):
         """Create a new stock level record."""
         db_stock = StockLevelModel.from_entity(stock_level)
         self.session.add(db_stock)
-        await self.session.commit()
+        await self.session.flush()  # Flush to get the ID, but don't commit
         await self.session.refresh(db_stock)
         return db_stock.to_entity()
     
@@ -33,11 +33,11 @@ class SQLAlchemyStockLevelRepository(StockLevelRepository):
             return db_stock.to_entity()
         return None
     
-    async def get_by_sku_location(self, sku_id: UUID, location_id: UUID) -> Optional[StockLevel]:
-        """Get stock level for a specific SKU at a location."""
+    async def get_by_item_location(self, item_id: UUID, location_id: UUID) -> Optional[StockLevel]:
+        """Get stock level for a specific Item at a location."""
         query = select(StockLevelModel).where(
             and_(
-                StockLevelModel.sku_id == sku_id,
+                StockLevelModel.item_id == item_id,
                 StockLevelModel.location_id == location_id,
                 StockLevelModel.is_active == True
             )
@@ -54,7 +54,7 @@ class SQLAlchemyStockLevelRepository(StockLevelRepository):
         skip: int = 0,
         limit: int = 100,
         location_id: Optional[UUID] = None,
-        sku_id: Optional[UUID] = None,
+        item_id: Optional[UUID] = None,
         low_stock_only: bool = False,
         is_active: Optional[bool] = True
     ) -> Tuple[List[StockLevel], int]:
@@ -72,8 +72,8 @@ class SQLAlchemyStockLevelRepository(StockLevelRepository):
         if location_id:
             filters.append(StockLevelModel.location_id == location_id)
         
-        if sku_id:
-            filters.append(StockLevelModel.sku_id == sku_id)
+        if item_id:
+            filters.append(StockLevelModel.item_id == item_id)
         
         if low_stock_only:
             filters.append(StockLevelModel.quantity_available <= StockLevelModel.reorder_point)
@@ -109,7 +109,7 @@ class SQLAlchemyStockLevelRepository(StockLevelRepository):
             raise ValueError(f"Stock level with id {stock_level.id} not found")
         
         # Update fields
-        db_stock.sku_id = stock_level.sku_id
+        db_stock.item_id = stock_level.item_id
         db_stock.location_id = stock_level.location_id
         db_stock.quantity_on_hand = stock_level.quantity_on_hand
         db_stock.quantity_available = stock_level.quantity_available
@@ -123,7 +123,7 @@ class SQLAlchemyStockLevelRepository(StockLevelRepository):
         db_stock.updated_by = stock_level.updated_by
         db_stock.is_active = stock_level.is_active
         
-        await self.session.commit()
+        await self.session.flush()  # Flush to persist changes, but don't commit
         await self.session.refresh(db_stock)
         
         return db_stock.to_entity()
@@ -138,19 +138,19 @@ class SQLAlchemyStockLevelRepository(StockLevelRepository):
             return False
         
         db_stock.is_active = False
-        await self.session.commit()
+        await self.session.flush()  # Flush to persist changes, but don't commit
         
         return True
     
-    async def get_or_create(self, sku_id: UUID, location_id: UUID) -> StockLevel:
+    async def get_or_create(self, item_id: UUID, location_id: UUID) -> StockLevel:
         """Get existing stock level or create new one."""
-        existing = await self.get_by_sku_location(sku_id, location_id)
+        existing = await self.get_by_item_location(item_id, location_id)
         if existing:
             return existing
         
         # Create new stock level
         stock_level = StockLevel(
-            sku_id=sku_id,
+            item_id=item_id,
             location_id=location_id,
             quantity_on_hand=0,
             quantity_available=0,
@@ -163,8 +163,8 @@ class SQLAlchemyStockLevelRepository(StockLevelRepository):
         
         return await self.create(stock_level)
     
-    async def get_total_stock_by_sku(self, sku_id: UUID) -> dict:
-        """Get total stock quantities across all locations for a SKU."""
+    async def get_total_stock_by_item(self, item_id: UUID) -> dict:
+        """Get total stock quantities across all locations for an Item."""
         query = select(
             func.sum(StockLevelModel.quantity_on_hand).label('total_on_hand'),
             func.sum(StockLevelModel.quantity_available).label('total_available'),
@@ -173,7 +173,7 @@ class SQLAlchemyStockLevelRepository(StockLevelRepository):
             func.sum(StockLevelModel.quantity_damaged).label('total_damaged')
         ).where(
             and_(
-                StockLevelModel.sku_id == sku_id,
+                StockLevelModel.item_id == item_id,
                 StockLevelModel.is_active == True
             )
         )
@@ -255,21 +255,21 @@ class SQLAlchemyStockLevelRepository(StockLevelRepository):
     
     async def check_availability(
         self,
-        sku_id: UUID,
+        item_id: UUID,
         quantity: int,
         location_id: Optional[UUID] = None
     ) -> Tuple[bool, int]:
         """Check if quantity is available. Returns (is_available, total_available)."""
         if location_id:
             # Check specific location
-            stock = await self.get_by_sku_location(sku_id, location_id)
+            stock = await self.get_by_item_location(item_id, location_id)
             if stock:
                 available = stock.quantity_available
                 return available >= quantity, available
             return False, 0
         else:
             # Check across all locations
-            totals = await self.get_total_stock_by_sku(sku_id)
+            totals = await self.get_total_stock_by_item(item_id)
             available = totals['total_available']
             return available >= quantity, available
     
@@ -293,7 +293,7 @@ class SQLAlchemyStockLevelRepository(StockLevelRepository):
         row = result.one()
         
         return {
-            'total_skus': row.total_skus or 0,
+            'total_items': row.total_skus or 0,
             'total_units': row.total_units or 0,
             'total_available': row.total_available or 0,
             'total_damaged': row.total_damaged or 0
@@ -301,7 +301,7 @@ class SQLAlchemyStockLevelRepository(StockLevelRepository):
     
     async def transfer_stock(
         self,
-        sku_id: UUID,
+        item_id: UUID,
         from_location_id: UUID,
         to_location_id: UUID,
         quantity: int,
@@ -309,9 +309,9 @@ class SQLAlchemyStockLevelRepository(StockLevelRepository):
     ) -> Tuple[StockLevel, StockLevel]:
         """Transfer stock between locations. Returns (from_stock, to_stock)."""
         # Get source stock level
-        from_stock = await self.get_by_sku_location(sku_id, from_location_id)
+        from_stock = await self.get_by_item_location(item_id, from_location_id)
         if not from_stock:
-            raise ValueError(f"No stock found for SKU {sku_id} at location {from_location_id}")
+            raise ValueError(f"No stock found for Item {item_id} at location {from_location_id}")
         
         # Check availability
         if from_stock.quantity_available < quantity:
@@ -321,7 +321,7 @@ class SQLAlchemyStockLevelRepository(StockLevelRepository):
             )
         
         # Get or create destination stock level
-        to_stock = await self.get_or_create(sku_id, to_location_id)
+        to_stock = await self.get_or_create(item_id, to_location_id)
         
         # Perform transfer
         from_stock.quantity_available -= quantity

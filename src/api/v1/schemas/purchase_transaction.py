@@ -10,9 +10,18 @@ from .transaction import TransactionHeaderBase
 class CompletedPurchaseItemRecord(BaseModel):
     """Schema for recording a completed purchase line item."""
 
-    sku_id: UUID = Field(..., description="SKU that was purchased")
+    item_id: UUID = Field(..., description="Item that was purchased")
     quantity: Decimal = Field(..., gt=0, description="Quantity purchased")
     unit_cost: Decimal = Field(..., ge=0, description="Cost per unit")
+    tax_rate: Optional[Decimal] = Field(
+        Decimal("0"), ge=0, le=100, description="Item-specific tax rate percentage"
+    )
+    tax_amount: Optional[Decimal] = Field(
+        Decimal("0"), ge=0, description="Item-specific tax amount (calculated field)"
+    )
+    discount_amount: Optional[Decimal] = Field(
+        Decimal("0"), ge=0, description="Item-specific discount amount"
+    )
     serial_numbers: Optional[List[str]] = Field(
         None, description="Serial numbers for serialized items"
     )
@@ -22,19 +31,26 @@ class CompletedPurchaseItemRecord(BaseModel):
     notes: Optional[str] = Field(None, description="Additional line item notes")
 
 
-class CompletedPurchaseRecord(TransactionHeaderBase):
+class CompletedPurchaseRecord(BaseModel):
     """Schema for recording a completed purchase transaction."""
 
     supplier_id: UUID = Field(
         ..., description="Supplier ID (customer with type=BUSINESS)"
     )
+    location_id: UUID = Field(
+        ..., description="Location where items will be stored"
+    )
     purchase_date: date = Field(
         ..., description="Actual date when purchase was completed"
     )
+    notes: Optional[str] = Field(None, description="Purchase notes")
+    reference_number: Optional[str] = Field(None, description="Purchase reference number")
     items: List[CompletedPurchaseItemRecord] = Field(
         ..., description="List of items that were purchased"
     )
-    tax_rate: Decimal = Field(Decimal("0"), ge=0, description="Tax rate percentage")
+    tax_rate: Optional[Decimal] = Field(Decimal("0"), ge=0, le=100, description="Purchase-level tax rate percentage")
+    tax_amount: Optional[Decimal] = Field(Decimal("0"), ge=0, description="Purchase-level tax amount (calculated field)")
+    discount_amount: Optional[Decimal] = Field(Decimal("0"), ge=0, description="Purchase-level fixed discount amount")
     invoice_number: Optional[str] = Field(
         None, description="External supplier invoice number"
     )

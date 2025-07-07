@@ -119,7 +119,7 @@ class CompleteRentalReturnUseCase:
             matching_line = None
             for line in transaction_lines:
                 if line.inventory_unit_id == unit.id or (
-                    line.sku_id == unit.sku_id and not line.inventory_unit_id
+                    line.item_id == unit.item_id and not line.inventory_unit_id
                 ):
                     matching_line = line
                     break
@@ -140,7 +140,7 @@ class CompleteRentalReturnUseCase:
             # Calculate damage fees
             damage_fee = Decimal("0.00")
             if return_item.is_damaged:
-                # Get item value from SKU
+                # Get item value
                 item_value = matching_line.unit_price * Decimal("30")  # Assume 30x daily rate
                 damage_fee = item_value * (damage_fee_percentage / 100)
                 total_damage_fees += damage_fee

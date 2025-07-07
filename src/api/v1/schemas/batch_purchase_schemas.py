@@ -4,8 +4,7 @@ from decimal import Decimal
 from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
-from .item_master_schemas import ItemMasterCreate
-from .sku_schemas import SKUCreate
+from .item_schemas import ItemCreate
 from .purchase_transaction import CompletedPurchaseItemRecord, CompletedPurchaseRecord
 
 
@@ -83,6 +82,15 @@ class BatchPurchaseItemRecord(BaseModel):
     # Purchase line item details
     quantity: Decimal = Field(..., gt=0, description="Quantity purchased")
     unit_cost: Decimal = Field(..., ge=0, description="Cost per unit")
+    tax_rate: Optional[Decimal] = Field(
+        Decimal("0"), ge=0, le=100, description="Item-specific tax rate percentage"
+    )
+    tax_amount: Optional[Decimal] = Field(
+        Decimal("0"), ge=0, description="Item-specific tax amount (calculated field)"
+    )
+    discount_amount: Optional[Decimal] = Field(
+        Decimal("0"), ge=0, description="Item-specific discount amount"
+    )
     serial_numbers: Optional[List[str]] = Field(
         None, description="Serial numbers for serialized items"
     )
@@ -131,7 +139,9 @@ class BatchPurchaseRecord(BaseModel):
     purchase_date: date = Field(
         ..., description="Actual date when purchase was completed"
     )
-    tax_rate: Decimal = Field(Decimal("0"), ge=0, description="Tax rate percentage")
+    tax_rate: Optional[Decimal] = Field(Decimal("0"), ge=0, le=100, description="Purchase-level tax rate percentage")
+    tax_amount: Optional[Decimal] = Field(Decimal("0"), ge=0, description="Purchase-level tax amount (calculated field)")
+    discount_amount: Optional[Decimal] = Field(Decimal("0"), ge=0, description="Purchase-level fixed discount amount")
     invoice_number: Optional[str] = Field(
         None, description="External supplier invoice number"
     )

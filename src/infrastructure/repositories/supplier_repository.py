@@ -286,11 +286,12 @@ class SQLAlchemySupplierRepository(ISupplierRepository):
                 "total_spend": float(supplier.total_spend)
             })
 
-        # Monthly new suppliers (last 12 months)
+        # Monthly new suppliers (last 12 months) - SQLite compatible
         monthly_new = []
         for i in range(12):
-            month_start = text(f"date_trunc('month', now() - interval '{i} months')")
-            month_end = text(f"date_trunc('month', now() - interval '{i} months') + interval '1 month'")
+            # SQLite: Get first day of month i months ago
+            month_start = text(f"date('now', '-{i} months', 'start of month')")
+            month_end = text(f"date('now', '-{i} months', 'start of month', '+1 month')")
             
             month_result = await self.session.execute(
                 select(func.count(SupplierModel.id))

@@ -42,7 +42,7 @@ from ....infrastructure.repositories.transaction_header_repository import SQLAlc
 from ....infrastructure.repositories.transaction_line_repository import SQLAlchemyTransactionLineRepository
 from ....infrastructure.repositories.inventory_unit_repository import SQLAlchemyInventoryUnitRepository
 from ....infrastructure.repositories.stock_level_repository import SQLAlchemyStockLevelRepository
-from ....infrastructure.repositories.sku_repository import SQLAlchemySKURepository
+from ....infrastructure.repositories.item_repository import ItemRepositoryImpl
 from ..dependencies.database import get_db
 
 
@@ -67,7 +67,7 @@ def get_calculate_late_fee_use_case(db: AsyncSession = Depends(get_db)) -> Calcu
         return_repository=SQLAlchemyRentalReturnRepository(db),
         line_repository=SQLAlchemyRentalReturnLineRepository(db),
         transaction_repository=SQLAlchemyTransactionHeaderRepository(db),
-        sku_repository=SQLAlchemySKURepository(db)
+        item_repository=ItemRepositoryImpl(db)
     )
 
 

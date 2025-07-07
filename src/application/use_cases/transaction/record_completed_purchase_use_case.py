@@ -14,7 +14,7 @@ from ....domain.repositories.transaction_header_repository import (
 from ....domain.repositories.transaction_line_repository import (
     TransactionLineRepository,
 )
-from ....domain.repositories.sku_repository import SKURepository
+from ....domain.repositories.item_repository import ItemRepository
 from ....domain.repositories.customer_repository import CustomerRepository
 from ....domain.repositories.inventory_unit_repository import InventoryUnitRepository
 from ....domain.repositories.stock_level_repository import StockLevelRepository
@@ -35,7 +35,7 @@ class RecordCompletedPurchaseUseCase:
         self,
         transaction_repository: TransactionHeaderRepository,
         line_repository: TransactionLineRepository,
-        sku_repository: SKURepository,
+        item_repository: ItemRepository,
         customer_repository: CustomerRepository,
         inventory_repository: InventoryUnitRepository,
         stock_repository: StockLevelRepository,
@@ -43,7 +43,7 @@ class RecordCompletedPurchaseUseCase:
         """Initialize use case with repositories."""
         self.transaction_repository = transaction_repository
         self.line_repository = line_repository
-        self.sku_repository = sku_repository
+        self.item_repository = item_repository
         self.customer_repository = customer_repository
         self.inventory_repository = inventory_repository
         self.stock_repository = stock_repository
@@ -55,6 +55,8 @@ class RecordCompletedPurchaseUseCase:
         items: List[Dict],
         purchase_date: date,
         tax_rate: Decimal = Decimal("0.00"),
+        tax_amount: Optional[Decimal] = None,
+        discount_amount: Decimal = Decimal("0.00"),
         invoice_number: Optional[str] = None,
         invoice_date: Optional[date] = None,
         notes: Optional[str] = None,
@@ -108,25 +110,30 @@ class RecordCompletedPurchaseUseCase:
         lines = []
         line_number = 1
         subtotal = Decimal("0.00")
+        total_item_discount = Decimal("0.00")
+        total_item_tax = Decimal("0.00")
 
         for item in items:
-            sku_id = item.get("sku_id")
+            item_id = item.get("item_id")
             quantity = Decimal(str(item.get("quantity", 1)))
             unit_cost = Decimal(str(item.get("unit_cost", 0)))
+            item_tax_rate = Decimal(str(item.get("tax_rate", 0)))
+            item_tax_amount = Decimal(str(item.get("tax_amount", 0)))
+            item_discount_amount = Decimal(str(item.get("discount_amount", 0)))
             serial_numbers = item.get("serial_numbers", [])
             condition_notes = item.get("condition_notes")
             item_notes = item.get("notes")
 
-            # Validate SKU
-            sku = await self.sku_repository.get_by_id(sku_id)
-            if not sku:
-                raise ValueError(f"SKU with id {sku_id} not found")
+            # Validate Item
+            item_obj = await self.item_repository.get_by_id(item_id)
+            if not item_obj:
+                raise ValueError(f"Item with id {item_id} not found")
 
-            if not sku.is_active:
-                raise ValueError(f"SKU {sku.sku_code} is not active")
+            if not item_obj.is_active:
+                raise ValueError(f"Item {item_obj.item_id or item_obj.id} is not active")
 
-            # Create line
-            description = f"{sku.sku_code} - {sku.sku_name}"
+            # Create main product line
+            description = f"{item_obj.item_id or item_obj.id} - {item_obj.item_name}"
             if item_notes:
                 description += f" ({item_notes})"
 
@@ -134,7 +141,7 @@ class RecordCompletedPurchaseUseCase:
                 transaction_id=transaction.id,
                 line_number=line_number,
                 line_type=LineItemType.PRODUCT,
-                sku_id=sku_id,
+                item_id=item_id,
                 description=description,
                 quantity=quantity,
                 unit_price=unit_cost,  # This is the purchase cost
@@ -144,14 +151,53 @@ class RecordCompletedPurchaseUseCase:
 
             # Calculate line total
             line.calculate_line_total()
-            subtotal += line.line_total
+            item_subtotal = line.line_total
+            subtotal += item_subtotal
 
             lines.append(line)
             line_number += 1
 
+            # Add item-level discount if provided
+            if item_discount_amount > 0:
+                discount_line = TransactionLine(
+                    transaction_id=transaction.id,
+                    line_number=line_number,
+                    line_type=LineItemType.DISCOUNT,
+                    description=f"Item discount - {item_obj.item_id or item_obj.id}",
+                    quantity=Decimal("1"),
+                    unit_price=-item_discount_amount,
+                    created_by=created_by,
+                )
+                discount_line.calculate_line_total()
+                lines.append(discount_line)
+                line_number += 1
+                total_item_discount += item_discount_amount
+
+            # Add item-level tax if provided
+            if item_tax_rate > 0 or item_tax_amount > 0:
+                # Calculate tax amount if not provided
+                if item_tax_amount == 0 and item_tax_rate > 0:
+                    taxable_amount = item_subtotal - item_discount_amount
+                    item_tax_amount = taxable_amount * (item_tax_rate / 100)
+                
+                if item_tax_amount > 0:
+                    tax_line = TransactionLine(
+                        transaction_id=transaction.id,
+                        line_number=line_number,
+                        line_type=LineItemType.TAX,
+                        description=f"Item tax - {item_obj.item_id or item_obj.id}" + (f" ({item_tax_rate}%)" if item_tax_rate > 0 else ""),
+                        quantity=Decimal("1"),
+                        unit_price=item_tax_amount,
+                        created_by=created_by,
+                    )
+                    tax_line.calculate_line_total()
+                    lines.append(tax_line)
+                    line_number += 1
+                    total_item_tax += item_tax_amount
+
             # Create inventory records immediately
             await self._create_inventory_units(
-                sku=sku,
+                item=item_obj,
                 quantity=quantity,
                 unit_cost=unit_cost,
                 location_id=location_id,
@@ -163,34 +209,67 @@ class RecordCompletedPurchaseUseCase:
 
             # Update stock levels immediately
             await self._update_stock_levels(
-                sku_id=sku_id,
+                item_id=item_id,
                 location_id=location_id,
                 quantity_increase=int(quantity),
                 updated_by=created_by,
             )
 
-        # Calculate tax
-        if tax_rate > 0 and subtotal > 0:
-            tax_amount = subtotal * (tax_rate / 100)
+        # Apply purchase-level discount if provided
+        if discount_amount > 0:
+            discount_line = TransactionLine(
+                transaction_id=transaction.id,
+                line_number=line_number,
+                line_type=LineItemType.DISCOUNT,
+                description="Purchase discount",
+                quantity=Decimal("1"),
+                unit_price=-discount_amount,
+                created_by=created_by,
+            )
+            discount_line.calculate_line_total()
+            lines.append(discount_line)
+            line_number += 1
+
+        # Calculate purchase-level tax
+        purchase_level_tax_amount = Decimal("0.00")
+        
+        # Calculate taxable amount after all discounts
+        total_discount = total_item_discount + discount_amount
+        taxable_amount = subtotal - total_discount
+        
+        # If tax_amount is provided, use it; otherwise calculate from tax_rate
+        if tax_amount is not None and tax_amount > 0:
+            purchase_level_tax_amount = tax_amount
+            tax_line = TransactionLine(
+                transaction_id=transaction.id,
+                line_number=line_number,
+                line_type=LineItemType.TAX,
+                description="Purchase tax",
+                quantity=Decimal("1"),
+                unit_price=purchase_level_tax_amount,
+                created_by=created_by,
+            )
+            tax_line.calculate_line_total()
+            lines.append(tax_line)
+        elif tax_rate > 0 and taxable_amount > 0:
+            purchase_level_tax_amount = taxable_amount * (tax_rate / 100)
             tax_line = TransactionLine(
                 transaction_id=transaction.id,
                 line_number=line_number,
                 line_type=LineItemType.TAX,
                 description=f"Purchase tax ({tax_rate}%)",
                 quantity=Decimal("1"),
-                unit_price=tax_amount,
+                unit_price=purchase_level_tax_amount,
                 created_by=created_by,
             )
             tax_line.calculate_line_total()
             lines.append(tax_line)
-        else:
-            tax_amount = Decimal("0.00")
 
         # Update transaction totals
         transaction.subtotal = subtotal
-        transaction.discount_amount = Decimal("0.00")
-        transaction.tax_amount = tax_amount
-        transaction.total_amount = subtotal + tax_amount
+        transaction.discount_amount = total_discount  # Total of item and purchase discounts
+        transaction.tax_amount = total_item_tax + purchase_level_tax_amount  # Total of item and purchase taxes
+        transaction.total_amount = subtotal - total_discount + transaction.tax_amount
         transaction.paid_amount = transaction.total_amount  # Purchase is already paid
 
         # Save transaction
@@ -207,7 +286,7 @@ class RecordCompletedPurchaseUseCase:
 
     async def _create_inventory_units(
         self,
-        sku,
+        item,
         quantity: Decimal,
         unit_cost: Decimal,
         location_id: UUID,
@@ -218,11 +297,11 @@ class RecordCompletedPurchaseUseCase:
     ):
         """Create inventory units for purchased goods."""
 
-        if sku.is_serialized:
+        if item.is_serialized:
             # Create one inventory unit per serial number
             if not serial_numbers:
                 raise ValueError(
-                    f"Serial numbers required for serialized SKU {sku.sku_code}"
+                    f"Serial numbers required for serialized Item {item.item_id or item.id}"
                 )
 
             if len(serial_numbers) != int(quantity):
@@ -241,12 +320,12 @@ class RecordCompletedPurchaseUseCase:
 
                 inventory_unit = InventoryUnit(
                     inventory_id=self._generate_inventory_id(),
-                    sku_id=sku.id,
+                    item_id=item.id,
                     serial_number=serial_number,
                     location_id=location_id,
                     current_status=(
                         InventoryStatus.AVAILABLE_SALE
-                        if sku.is_saleable
+                        if item.is_saleable
                         else InventoryStatus.AVAILABLE_RENT
                     ),
                     condition_grade="A",  # New items start with grade A
@@ -266,7 +345,7 @@ class RecordCompletedPurchaseUseCase:
 
     async def _update_stock_levels(
         self,
-        sku_id: UUID,
+        item_id: UUID,
         location_id: UUID,
         quantity_increase: int,
         updated_by: Optional[str] = None,
@@ -274,28 +353,31 @@ class RecordCompletedPurchaseUseCase:
         """Update stock levels for purchased goods."""
 
         # Get existing stock level or create new one
-        stock_level = await self.stock_repository.get_by_sku_location(
-            sku_id, location_id
+        stock_level = await self.stock_repository.get_by_item_location(
+            item_id, location_id
         )
 
         if stock_level:
             # Update existing stock level
-            stock_level.total_quantity += quantity_increase
-            stock_level.available_sale += quantity_increase
-            stock_level.last_updated = datetime.utcnow()
+            stock_level.quantity_on_hand += quantity_increase
+            stock_level.quantity_available += quantity_increase
+            stock_level.updated_by = updated_by
             await self.stock_repository.update(stock_level)
         else:
             # Create new stock level
-            sku = await self.sku_repository.get_by_id(sku_id)
+            item = await self.item_repository.get_by_id(item_id)
             stock_level = StockLevel(
-                sku_id=sku_id,
+                item_id=item_id,
                 location_id=location_id,
-                total_quantity=quantity_increase,
-                available_sale=quantity_increase if sku.is_saleable else 0,
-                available_rent=quantity_increase if sku.is_rentable else 0,
-                reserved=0,
-                in_transit=0,
-                damaged=0,
+                quantity_on_hand=quantity_increase,
+                quantity_available=quantity_increase,
+                quantity_reserved=0,
+                quantity_in_transit=0,
+                quantity_damaged=0,
+                reorder_point=0,
+                reorder_quantity=0,
+                maximum_stock=None,
+                created_by=updated_by,
             )
             await self.stock_repository.create(stock_level)
 

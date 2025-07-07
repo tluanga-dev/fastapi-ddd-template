@@ -15,7 +15,7 @@ class TransactionLineModel(BaseModel):
     transaction_id = Column(UUID(), ForeignKey("transaction_headers.id"), nullable=False, index=True)
     line_number = Column(Integer, nullable=False)
     line_type = Column(Enum(LineItemType), nullable=False, index=True)
-    sku_id = Column(UUID(), ForeignKey("skus.id"), nullable=True, index=True)
+    item_id = Column(UUID(), ForeignKey("items.id"), nullable=True, index=True)
     inventory_unit_id = Column(UUID(), ForeignKey("inventory_units.id"), nullable=True, index=True)
     description = Column(String(500), nullable=False)
     
@@ -43,7 +43,7 @@ class TransactionLineModel(BaseModel):
     
     # Relationships
     transaction = relationship("TransactionHeaderModel", back_populates="lines")
-    sku = relationship("SKUModel", foreign_keys=[sku_id])
+    item = relationship("ItemModel", foreign_keys=[item_id])
     inventory_unit = relationship("InventoryUnitModel", foreign_keys=[inventory_unit_id])
     
     def to_entity(self) -> TransactionLine:
@@ -53,7 +53,7 @@ class TransactionLineModel(BaseModel):
             transaction_id=self.transaction_id,
             line_number=self.line_number,
             line_type=self.line_type,
-            sku_id=self.sku_id,
+            item_id=self.item_id,
             inventory_unit_id=self.inventory_unit_id,
             description=self.description,
             quantity=self.quantity,
@@ -85,7 +85,7 @@ class TransactionLineModel(BaseModel):
             transaction_id=line.transaction_id,
             line_number=line.line_number,
             line_type=line.line_type,
-            sku_id=line.sku_id,
+            item_id=line.item_id,
             inventory_unit_id=line.inventory_unit_id,
             description=line.description,
             quantity=line.quantity,

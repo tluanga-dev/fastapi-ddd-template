@@ -24,7 +24,7 @@ class CreatePurchaseTransactionUseCase:
         self,
         transaction_repository,
         line_repository,
-        sku_repository,
+        item_repository,
         customer_repository,
         inventory_repository=None,
         stock_repository=None,
@@ -34,7 +34,7 @@ class CreatePurchaseTransactionUseCase:
         self.new_use_case = RecordCompletedPurchaseUseCase(
             transaction_repository=transaction_repository,
             line_repository=line_repository,
-            sku_repository=sku_repository,
+            item_repository=item_repository,
             customer_repository=customer_repository,
             inventory_repository=inventory_repository,
             stock_repository=stock_repository,

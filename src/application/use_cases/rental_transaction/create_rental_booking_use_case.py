@@ -7,7 +7,7 @@ from ....domain.entities.transaction_header import TransactionHeader
 from ....domain.entities.transaction_line import TransactionLine
 from ....domain.entities.customer import Customer
 from ....domain.entities.inventory_unit import InventoryUnit
-from ....domain.entities.sku import SKU
+from ....domain.entities.item import Item
 from ....domain.value_objects.transaction_type import (
     TransactionType, TransactionStatus, PaymentStatus, LineItemType, RentalPeriodUnit
 )
@@ -16,7 +16,7 @@ from ....domain.repositories.transaction_header_repository import TransactionHea
 from ....domain.repositories.transaction_line_repository import TransactionLineRepository
 from ....domain.repositories.customer_repository import CustomerRepository
 from ....domain.repositories.inventory_unit_repository import InventoryUnitRepository
-from ....domain.repositories.sku_repository import SKURepository
+from ....domain.repositories.item_repository import ItemRepository
 from ....domain.repositories.stock_level_repository import StockLevelRepository
 
 
@@ -24,7 +24,7 @@ class RentalBookingItem:
     """DTO for rental booking item."""
     def __init__(
         self,
-        sku_id: UUID,
+        item_id: UUID,
         quantity: int,
         rental_start_date: date,
         rental_end_date: date,
@@ -33,7 +33,7 @@ class RentalBookingItem:
         discount_percentage: Optional[Decimal] = None,
         notes: Optional[str] = None
     ):
-        self.sku_id = sku_id
+        self.item_id = item_id
         self.quantity = quantity
         self.rental_start_date = rental_start_date
         self.rental_end_date = rental_end_date
@@ -52,14 +52,14 @@ class CreateRentalBookingUseCase:
         transaction_line_repo: TransactionLineRepository,
         customer_repo: CustomerRepository,
         inventory_unit_repo: InventoryUnitRepository,
-        sku_repo: SKURepository,
+        item_repo: ItemRepository,
         stock_level_repo: StockLevelRepository
     ):
         self.transaction_repo = transaction_repo
         self.transaction_line_repo = transaction_line_repo
         self.customer_repo = customer_repo
         self.inventory_unit_repo = inventory_unit_repo
-        self.sku_repo = sku_repo
+        self.item_repo = item_repo
         self.stock_level_repo = stock_level_repo
     
     async def execute(
@@ -83,37 +83,37 @@ class CreateRentalBookingUseCase:
         if not customer.is_active:
             raise ValueError("Customer account is inactive")
         
-        # 2. Validate all SKUs and check availability
+        # 2. Validate all items and check availability
         validated_items = []
         for item in items:
-            # Validate SKU
-            sku = await self.sku_repo.get_by_id(item.sku_id)
-            if not sku:
-                raise ValueError(f"SKU with id {item.sku_id} not found")
+            # Validate item
+            item_entity = await self.item_repo.get_by_id(item.item_id)
+            if not item_entity:
+                raise ValueError(f"Item with id {item.item_id} not found")
             
-            if not sku.is_rentable:
-                raise ValueError(f"SKU {sku.sku_code} is not available for rental")
+            if not item_entity.is_rentable:
+                raise ValueError(f"Item {item_entity.item_code} is not available for rental")
             
             # Check rental period constraints
             rental_days = (item.rental_end_date - item.rental_start_date).days + 1
-            if rental_days < sku.min_rental_days:
+            if rental_days < item_entity.min_rental_days:
                 raise ValueError(
-                    f"SKU {sku.sku_code} requires minimum {sku.min_rental_days} days rental"
+                    f"Item {item_entity.item_code} requires minimum {item_entity.min_rental_days} days rental"
                 )
             
-            if sku.max_rental_days and rental_days > sku.max_rental_days:
+            if item_entity.max_rental_days and rental_days > item_entity.max_rental_days:
                 raise ValueError(
-                    f"SKU {sku.sku_code} allows maximum {sku.max_rental_days} days rental"
+                    f"Item {item_entity.item_code} allows maximum {item_entity.max_rental_days} days rental"
                 )
             
             # Check availability
             available_units = await self._check_availability(
-                sku.id, location_id, item.rental_start_date, item.rental_end_date
+                item_entity.id, location_id, item.rental_start_date, item.rental_end_date
             )
             
             if len(available_units) < item.quantity:
                 raise ValueError(
-                    f"Insufficient availability for SKU {sku.sku_code}. "
+                    f"Insufficient availability for item {item_entity.item_code}. "
                     f"Requested: {item.quantity}, Available: {len(available_units)}"
                 )
             
@@ -121,7 +121,7 @@ class CreateRentalBookingUseCase:
             if not item.inventory_unit_ids:
                 item.inventory_unit_ids = [unit.id for unit in available_units[:item.quantity]]
             
-            validated_items.append((item, sku, available_units))
+            validated_items.append((item, item_entity, available_units))
         
         # 3. Generate transaction number
         transaction_number = await self._generate_transaction_number()
@@ -147,18 +147,18 @@ class CreateRentalBookingUseCase:
         line_number = 1
         subtotal = Decimal("0.00")
         
-        for item, sku, available_units in validated_items:
+        for item, item_entity, available_units in validated_items:
             # Calculate rental price
             rental_days = (item.rental_end_date - item.rental_start_date).days + 1
-            unit_price = item.custom_price or sku.rental_base_price or Decimal("0.00")
+            unit_price = item.custom_price or item_entity.rental_base_price or Decimal("0.00")
             
             # Create product line
             line = TransactionLine(
                 transaction_id=transaction.id,
                 line_number=line_number,
                 line_type=LineItemType.PRODUCT,
-                sku_id=sku.id,
-                description=f"Rental: {sku.sku_name}",
+                item_id=item_entity.id,
+                description=f"Rental: {item_entity.item_name}",
                 quantity=Decimal(str(item.quantity)),
                 unit_price=unit_price,
                 discount_percentage=item.discount_percentage or Decimal("0.00"),
@@ -234,15 +234,15 @@ class CreateRentalBookingUseCase:
     
     async def _check_availability(
         self,
-        sku_id: UUID,
+        item_id: UUID,
         location_id: UUID,
         start_date: date,
         end_date: date
     ) -> List[InventoryUnit]:
         """Check inventory availability for rental period."""
-        # Get all inventory units for SKU at location
-        all_units = await self.inventory_unit_repo.get_by_sku_and_location(
-            sku_id, location_id
+        # Get all inventory units for item at location
+        all_units = await self.inventory_unit_repo.get_by_item_and_location(
+            item_id, location_id
         )
         
         # Filter for rentable units

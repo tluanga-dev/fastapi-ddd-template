@@ -6,11 +6,11 @@ from ..entities.base import BaseEntity
 
 
 class StockLevel(BaseEntity):
-    """Stock Level entity for aggregate inventory tracking by SKU and location."""
+    """Stock Level entity for aggregate inventory tracking by Item and location."""
 
     def __init__(
         self,
-        sku_id: UUID,
+        item_id: UUID,
         location_id: UUID,
         quantity_on_hand: int = 0,
         quantity_available: int = 0,
@@ -36,7 +36,7 @@ class StockLevel(BaseEntity):
             created_by=created_by,
             updated_by=updated_by,
         )
-        self.sku_id = sku_id
+        self.item_id = item_id
         self.location_id = location_id
         self.quantity_on_hand = quantity_on_hand
         self.quantity_available = quantity_available
@@ -50,8 +50,8 @@ class StockLevel(BaseEntity):
 
     def _validate(self):
         """Validate stock level business rules."""
-        if not self.sku_id:
-            raise ValueError("SKU ID is required")
+        if not self.item_id:
+            raise ValueError("Item ID is required")
 
         if not self.location_id:
             raise ValueError("Location ID is required")
@@ -143,6 +143,21 @@ class StockLevel(BaseEntity):
             )
 
         self.quantity_reserved -= quantity
+        self.quantity_on_hand -= quantity
+        self.update_timestamp(updated_by)
+        self._validate()
+    
+    def sell_direct(self, quantity: int, updated_by: Optional[str] = None):
+        """Sell directly from available stock (for completed sales)."""
+        if quantity <= 0:
+            raise ValueError("Sale quantity must be positive")
+
+        if quantity > self.quantity_available:
+            raise ValueError(
+                f"Cannot sell {quantity} units. Only {self.quantity_available} available"
+            )
+
+        self.quantity_available -= quantity
         self.quantity_on_hand -= quantity
         self.update_timestamp(updated_by)
         self._validate()
@@ -326,6 +341,51 @@ class StockLevel(BaseEntity):
         self.maximum_stock = maximum_stock
         self.update_timestamp(updated_by)
 
+    def ship_stock(self, quantity: int, updated_by: Optional[str] = None):
+        """Ship stock (reduce from available)."""
+        if quantity <= 0:
+            raise ValueError("Ship quantity must be positive")
+
+        if quantity > self.quantity_available:
+            raise ValueError(
+                f"Cannot ship {quantity} units. Only {self.quantity_available} available"
+            )
+
+        self.quantity_available -= quantity
+        self.quantity_on_hand -= quantity
+        self.update_timestamp(updated_by)
+        self._validate()
+
+    def release_stock(self, quantity: int, updated_by: Optional[str] = None):
+        """Release reserved stock back to available."""
+        if quantity <= 0:
+            raise ValueError("Release quantity must be positive")
+
+        if quantity > self.quantity_reserved:
+            raise ValueError(
+                f"Cannot release {quantity} units. Only {self.quantity_reserved} reserved"
+            )
+
+        self.quantity_reserved -= quantity
+        self.quantity_available += quantity
+        self.update_timestamp(updated_by)
+        self._validate()
+
+    def unmark_damaged(self, quantity: int, updated_by: Optional[str] = None):
+        """Repair damaged stock back to available."""
+        if quantity <= 0:
+            raise ValueError("Repair quantity must be positive")
+
+        if quantity > self.quantity_damaged:
+            raise ValueError(
+                f"Cannot repair {quantity} units. Only {self.quantity_damaged} damaged"
+            )
+
+        self.quantity_damaged -= quantity
+        self.quantity_available += quantity
+        self.update_timestamp(updated_by)
+        self._validate()
+
     @property
     def needs_reorder(self) -> bool:
         """Check if stock needs reordering."""
@@ -356,14 +416,14 @@ class StockLevel(BaseEntity):
     def __str__(self) -> str:
         """String representation of stock level."""
         return (
-            f"StockLevel(SKU={self.sku_id}, Location={self.location_id}, "
+            f"StockLevel(Item={self.item_id}, Location={self.location_id}, "
             f"Available={self.quantity_available})"
         )
 
     def __repr__(self) -> str:
         """Developer representation of stock level."""
         return (
-            f"StockLevel(id={self.id}, sku_id={self.sku_id}, "
+            f"StockLevel(id={self.id}, item_id={self.item_id}, "
             f"location_id={self.location_id}, on_hand={self.quantity_on_hand}, "
             f"available={self.quantity_available})"
         )

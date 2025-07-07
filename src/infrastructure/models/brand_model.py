@@ -16,7 +16,7 @@ class BrandModel(BaseModel):
     description = Column(Text, nullable=True)
     
     # Items under this brand
-    items = relationship("ItemMasterModel", back_populates="brand")
+    items = relationship("ItemModel", back_populates="brand")
     
     # Indexes for efficient queries
     __table_args__ = (

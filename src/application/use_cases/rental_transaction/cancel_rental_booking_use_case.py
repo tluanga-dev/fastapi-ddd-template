@@ -74,9 +74,9 @@ class CancelRentalBookingUseCase:
         
         for line in lines:
             if line.line_type == "PRODUCT":
-                # Get units mentioned in transaction notes or by SKU
+                # Get units mentioned in transaction notes or by item
                 units = await self._get_reserved_units_for_line(
-                    transaction_id, line.sku_id, int(line.quantity)
+                    transaction_id, line.item_id, int(line.quantity)
                 )
                 reserved_units.extend(units)
         
@@ -143,13 +143,13 @@ class CancelRentalBookingUseCase:
     async def _get_reserved_units_for_line(
         self,
         transaction_id: UUID,
-        sku_id: UUID,
+        item_id: UUID,
         quantity: int
     ) -> List[InventoryUnit]:
         """Get inventory units reserved for this transaction line."""
-        # Get units with RESERVED_RENT status for this SKU
-        units = await self.inventory_unit_repo.get_by_status_and_sku(
-            InventoryStatus.RESERVED_RENT, sku_id
+        # Get units with RESERVED_RENT status for this item
+        units = await self.inventory_unit_repo.get_by_status_and_item(
+            InventoryStatus.RESERVED_RENT, item_id
         )
         
         # Filter units that mention this transaction
@@ -162,8 +162,8 @@ class CancelRentalBookingUseCase:
         
         # Also check RENTED status if transaction was already in progress
         if len(reserved_units) < quantity:
-            rented_units = await self.inventory_unit_repo.get_by_status_and_sku(
-                InventoryStatus.RENTED, sku_id
+            rented_units = await self.inventory_unit_repo.get_by_status_and_item(
+                InventoryStatus.RENTED, item_id
             )
             
             for unit in rented_units:

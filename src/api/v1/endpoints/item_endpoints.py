@@ -19,6 +19,8 @@ from ..schemas.item_schemas import (
     ItemSaleSettingsUpdate,
     ItemResponse,
     ItemListResponse,
+    ItemWithRelationsResponse,
+    ItemListWithRelationsResponse,
     ItemSearchRequest
 )
 from ..dependencies.database import get_db
@@ -121,7 +123,7 @@ async def get_item_by_barcode(
     return ItemResponse.model_validate(item)
 
 
-@router.get("/", response_model=ItemListResponse)
+@router.get("/", response_model=ItemListWithRelationsResponse)
 async def list_items(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Max records to return"),
@@ -132,26 +134,55 @@ async def list_items(
     repository: ItemRepositoryImpl = Depends(get_item_repository)
 ):
     """List items with pagination and filters."""
-    use_case = ListItemsUseCase(repository)
+    # Get items with relations
+    items_with_relations = await repository.get_all_with_relations(
+        skip=skip, 
+        limit=limit,
+        category_id=category_id,
+        brand_id=brand_id,
+        is_rentable=is_rentable,
+        is_saleable=is_saleable
+    )
     
-    # Apply filters based on query parameters
-    if category_id:
-        items = await use_case.execute_by_category(category_id, skip=skip, limit=limit)
-    elif brand_id:
-        items = await use_case.execute_by_brand(brand_id, skip=skip, limit=limit)
-    elif is_rentable is True:
-        items = await use_case.execute_rentable(skip=skip, limit=limit)
-    elif is_saleable is True:
-        items = await use_case.execute_saleable(skip=skip, limit=limit)
-    else:
-        items = await use_case.execute(skip=skip, limit=limit)
+    # Convert to response format with relations
+    items_response = []
+    for item_model in items_with_relations:
+        item_data = {
+            "id": item_model.id,
+            "item_id": item_model.item_id,
+            "sku": item_model.sku,
+            "item_name": item_model.item_name,
+            "category_id": item_model.category_id,
+            "brand_id": item_model.brand_id,
+            "description": item_model.description,
+            "is_serialized": item_model.is_serialized,
+            "barcode": item_model.barcode,
+            "model_number": item_model.model_number,
+            "weight": item_model.weight,
+            "dimensions": item_model.dimensions,
+            "is_rentable": item_model.is_rentable,
+            "is_saleable": item_model.is_saleable,
+            "min_rental_days": item_model.min_rental_days,
+            "rental_period": item_model.rental_period,
+            "max_rental_days": item_model.max_rental_days,
+            "rental_base_price": item_model.rental_base_price,
+            "sale_base_price": item_model.sale_base_price,
+            "created_at": item_model.created_at,
+            "updated_at": item_model.updated_at,
+            "created_by": item_model.created_by,
+            "updated_by": item_model.updated_by,
+            "is_active": item_model.is_active,
+            "category": item_model.category,
+            "brand": item_model.brand
+        }
+        items_response.append(ItemWithRelationsResponse(**item_data))
     
     # Note: For simplicity, we're not implementing total count
     # In a real app, you'd want to implement a separate count query
-    total_count = len(items)
+    total_count = len(items_response)
     
-    return ItemListResponse(
-        items=[ItemResponse.model_validate(item) for item in items],
+    return ItemListWithRelationsResponse(
+        items=items_response,
         total=total_count,
         skip=skip,
         limit=limit

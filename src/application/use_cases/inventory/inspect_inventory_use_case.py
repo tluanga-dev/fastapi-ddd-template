@@ -35,7 +35,7 @@ class InspectInventoryUseCase:
             InventoryStatus.AVAILABLE_RENT,
             InventoryStatus.AVAILABLE_SALE,
             InventoryStatus.DAMAGED,
-            InventoryStatus.REPAIR_NEEDED
+            InventoryStatus.REPAIR
         ]
         
         if inventory_unit.current_status not in inspectable_statuses:
@@ -44,12 +44,11 @@ class InspectInventoryUseCase:
                 f"Unit must be in one of: {', '.join(s.value for s in inspectable_statuses)}"
             )
         
-        # Update inspection details
-        inventory_unit.update_inspection(date.today(), inspected_by)
-        
-        # Update condition grade
+        # Save old condition grade before updating
         old_grade = inventory_unit.condition_grade
-        inventory_unit.update_condition(condition_grade, inspected_by)
+        
+        # Update inspection details and condition grade
+        inventory_unit.record_inspection(condition_grade, inspection_notes, inspected_by)
         
         # Build inspection notes
         timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
@@ -74,18 +73,15 @@ class InspectInventoryUseCase:
                     inventory_unit.update_status(InventoryStatus.DAMAGED, inspected_by)
             else:
                 # Failed inspection but not damaged means repair needed
-                if inventory_unit.can_transition_to(InventoryStatus.REPAIR_NEEDED):
-                    inventory_unit.update_status(InventoryStatus.REPAIR_NEEDED, inspected_by)
+                if inventory_unit.can_transition_to(InventoryStatus.REPAIR):
+                    inventory_unit.update_status(InventoryStatus.REPAIR, inspected_by)
         else:
             # Passed inspection
             if inventory_unit.current_status == InventoryStatus.INSPECTION_PENDING:
-                # Determine next status based on SKU settings
-                sku = await self.inventory_repository.get_by_id(inventory_unit.sku_id)
-                if sku:
-                    # Check associated SKU to determine if rentable or saleable
-                    # For now, default to available for rent
-                    if inventory_unit.can_transition_to(InventoryStatus.AVAILABLE_RENT):
-                        inventory_unit.update_status(InventoryStatus.AVAILABLE_RENT, inspected_by)
+                # Determine next status based on Item settings
+                # For now, default to available for rent
+                if inventory_unit.can_transition_to(InventoryStatus.AVAILABLE_RENT):
+                    inventory_unit.update_status(InventoryStatus.AVAILABLE_RENT, inspected_by)
         
         # Save updated inventory unit
         updated_unit = await self.inventory_repository.update(inventory_unit.id, inventory_unit)

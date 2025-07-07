@@ -109,10 +109,10 @@ class ProcessPaymentUseCase:
                 transaction._lines = await line_repo.get_by_transaction(transaction.id)
         
         for line in transaction._lines:
-            if line.line_type == "PRODUCT" and line.sku_id:
+            if line.line_type == "PRODUCT" and line.item_id:
                 # Update stock levels
-                stock_level = await self.stock_repository.get_by_sku_location(
-                    line.sku_id,
+                stock_level = await self.stock_repository.get_by_item_location(
+                    line.item_id,
                     transaction.location_id
                 )
                 
@@ -152,10 +152,10 @@ class ProcessPaymentUseCase:
                         unit.update_status(InventoryStatus.RENTED, processed_by)
                         unit.increment_rental_stats(line.rental_days, processed_by)
                         await self.inventory_repository.update(unit)
-            elif line.line_type == "PRODUCT" and line.sku_id:
+            elif line.line_type == "PRODUCT" and line.item_id:
                 # Reserve general units if not already assigned
                 available_units = await self.inventory_repository.get_available_units(
-                    sku_id=line.sku_id,
+                    item_id=line.item_id,
                     location_id=transaction.location_id
                 )
                 

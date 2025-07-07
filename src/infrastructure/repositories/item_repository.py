@@ -3,10 +3,13 @@ from uuid import UUID
 from decimal import Decimal
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from src.domain.entities.item import Item
 from src.domain.repositories.item_repository import ItemRepository
 from src.infrastructure.models.item_model import ItemModel
+from src.infrastructure.models.category_model import CategoryModel
+from src.infrastructure.models.brand_model import BrandModel
 from .base import SQLAlchemyRepository
 
 
@@ -166,3 +169,31 @@ class ItemRepositoryImpl(SQLAlchemyRepository[Item, ItemModel], ItemRepository):
         result = await self.session.execute(query)
         models = result.scalars().all()
         return [self._to_entity(model) for model in models]
+    
+    async def get_all_with_relations(self, skip: int = 0, limit: int = 100, 
+                                     category_id: Optional[UUID] = None,
+                                     brand_id: Optional[UUID] = None,
+                                     is_rentable: Optional[bool] = None,
+                                     is_saleable: Optional[bool] = None) -> List[ItemModel]:
+        """Get all active items with category and brand relationships loaded."""
+        query = select(self.model).options(
+            selectinload(self.model.category),
+            selectinload(self.model.brand)
+        ).filter(
+            self.model.is_active == True
+        )
+        
+        # Apply filters
+        if category_id:
+            query = query.filter(self.model.category_id == category_id)
+        if brand_id:
+            query = query.filter(self.model.brand_id == brand_id)
+        if is_rentable is not None:
+            query = query.filter(self.model.is_rentable == is_rentable)
+        if is_saleable is not None:
+            query = query.filter(self.model.is_saleable == is_saleable)
+            
+        query = query.offset(skip).limit(limit)
+        
+        result = await self.session.execute(query)
+        return result.scalars().all()

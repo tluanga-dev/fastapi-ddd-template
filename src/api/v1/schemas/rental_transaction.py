@@ -13,7 +13,7 @@ from ....domain.value_objects.item_type import InventoryStatus, ConditionGrade
 # Rental Booking Schemas
 class RentalBookingItemCreate(BaseModel):
     """Schema for creating a rental booking item."""
-    sku_id: UUID
+    item_id: UUID
     quantity: int = Field(gt=0)
     rental_start_date: date
     rental_end_date: date
@@ -120,7 +120,7 @@ class TransactionLineResponse(BaseModel):
     id: UUID
     line_number: int
     line_type: str
-    sku_id: Optional[UUID]
+    item_id: Optional[UUID]
     inventory_unit_id: Optional[UUID]
     description: str
     quantity: Decimal
@@ -236,7 +236,7 @@ class RentalTransactionFilter(BaseModel):
 
 class RentalAvailabilityCheckRequest(BaseModel):
     """Request schema for checking rental availability."""
-    sku_id: UUID
+    item_id: UUID
     location_id: UUID
     rental_start_date: date
     rental_end_date: date
@@ -245,7 +245,7 @@ class RentalAvailabilityCheckRequest(BaseModel):
 
 class RentalAvailabilityResponse(BaseModel):
     """Response schema for rental availability."""
-    sku_id: UUID
+    item_id: UUID
     location_id: UUID
     rental_period: Dict[str, date]
     requested_quantity: int

@@ -20,7 +20,7 @@ class SQLAlchemyInventoryUnitRepository(InventoryUnitRepository):
         """Create a new inventory unit."""
         db_unit = InventoryUnitModel.from_entity(inventory_unit)
         self.session.add(db_unit)
-        await self.session.commit()
+        await self.session.flush()  # Flush to persist changes, but don't commit
         await self.session.refresh(db_unit)
         return db_unit.to_entity()
     
@@ -53,7 +53,7 @@ class SQLAlchemyInventoryUnitRepository(InventoryUnitRepository):
         self,
         skip: int = 0,
         limit: int = 100,
-        sku_id: Optional[UUID] = None,
+        item_id: Optional[UUID] = None,
         location_id: Optional[UUID] = None,
         status: Optional[InventoryStatus] = None,
         condition_grade: Optional[ConditionGrade] = None,
@@ -67,8 +67,8 @@ class SQLAlchemyInventoryUnitRepository(InventoryUnitRepository):
         filters = []
         if is_active is not None:
             filters.append(InventoryUnitModel.is_active == is_active)
-        if sku_id:
-            filters.append(InventoryUnitModel.sku_id == sku_id)
+        if item_id:
+            filters.append(InventoryUnitModel.item_id == item_id)
         if location_id:
             filters.append(InventoryUnitModel.location_id == location_id)
         if status:
@@ -103,7 +103,7 @@ class SQLAlchemyInventoryUnitRepository(InventoryUnitRepository):
         
         # Update fields
         db_unit.inventory_code = inventory_unit.inventory_code
-        db_unit.sku_id = inventory_unit.sku_id
+        db_unit.item_id = inventory_unit.item_id
         db_unit.location_id = inventory_unit.location_id
         db_unit.serial_number = inventory_unit.serial_number
         db_unit.current_status = inventory_unit.current_status
@@ -119,7 +119,7 @@ class SQLAlchemyInventoryUnitRepository(InventoryUnitRepository):
         db_unit.updated_by = inventory_unit.updated_by
         db_unit.updated_at = datetime.utcnow()
         
-        await self.session.commit()
+        await self.session.flush()  # Flush to persist changes, but don't commit
         await self.session.refresh(db_unit)
         return db_unit.to_entity()
     
@@ -134,7 +134,7 @@ class SQLAlchemyInventoryUnitRepository(InventoryUnitRepository):
         
         db_unit.is_active = False
         db_unit.updated_at = datetime.utcnow()
-        await self.session.commit()
+        await self.session.flush()  # Flush to persist changes, but don't commit
         return True
     
     async def exists_by_code(self, inventory_code: str, exclude_id: Optional[UUID] = None) -> bool:
@@ -163,14 +163,14 @@ class SQLAlchemyInventoryUnitRepository(InventoryUnitRepository):
     
     async def get_available_units(
         self,
-        sku_id: UUID,
+        item_id: UUID,
         location_id: Optional[UUID] = None,
         condition_grade: Optional[ConditionGrade] = None
     ) -> List[InventoryUnit]:
         """Get available units for a SKU."""
         query = select(InventoryUnitModel).where(
             and_(
-                InventoryUnitModel.sku_id == sku_id,
+                InventoryUnitModel.item_id == item_id,
                 InventoryUnitModel.is_active == True,
                 or_(
                     InventoryUnitModel.current_status == InventoryStatus.AVAILABLE_SALE,
@@ -334,13 +334,13 @@ class SQLAlchemyInventoryUnitRepository(InventoryUnitRepository):
     
     async def get_by_sku_and_location(
         self,
-        sku_id: UUID,
+        item_id: UUID,
         location_id: UUID
     ) -> List[InventoryUnit]:
         """Get all inventory units for a SKU at a specific location."""
         query = select(InventoryUnitModel).where(
             and_(
-                InventoryUnitModel.sku_id == sku_id,
+                InventoryUnitModel.item_id == item_id,
                 InventoryUnitModel.location_id == location_id,
                 InventoryUnitModel.is_active == True
             )
@@ -354,13 +354,13 @@ class SQLAlchemyInventoryUnitRepository(InventoryUnitRepository):
     async def get_by_status_and_sku(
         self,
         status: InventoryStatus,
-        sku_id: UUID
+        item_id: UUID
     ) -> List[InventoryUnit]:
         """Get inventory units by status and SKU."""
         query = select(InventoryUnitModel).where(
             and_(
                 InventoryUnitModel.current_status == status,
-                InventoryUnitModel.sku_id == sku_id,
+                InventoryUnitModel.item_id == item_id,
                 InventoryUnitModel.is_active == True
             )
         )

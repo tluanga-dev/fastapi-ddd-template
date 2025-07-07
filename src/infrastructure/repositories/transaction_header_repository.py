@@ -22,7 +22,7 @@ class SQLAlchemyTransactionHeaderRepository(TransactionHeaderRepository):
         """Create a new transaction."""
         db_transaction = TransactionHeaderModel.from_entity(transaction)
         self.session.add(db_transaction)
-        await self.session.commit()
+        await self.session.flush()  # Flush to get the ID, but don't commit
         await self.session.refresh(db_transaction)
         return db_transaction.to_entity()
     
@@ -63,6 +63,7 @@ class SQLAlchemyTransactionHeaderRepository(TransactionHeaderRepository):
         location_id: Optional[UUID] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
+        reference_transaction_id: Optional[UUID] = None,
         is_active: Optional[bool] = True
     ) -> Tuple[List[TransactionHeader], int]:
         """List transactions with filters and pagination."""
@@ -96,6 +97,9 @@ class SQLAlchemyTransactionHeaderRepository(TransactionHeaderRepository):
         
         if end_date:
             filters.append(TransactionHeaderModel.transaction_date <= end_date)
+        
+        if reference_transaction_id:
+            filters.append(TransactionHeaderModel.reference_transaction_id == reference_transaction_id)
         
         # Apply all filters
         if filters:
@@ -284,13 +288,15 @@ class SQLAlchemyTransactionHeaderRepository(TransactionHeaderRepository):
         group_by: str = "day"
     ) -> List[dict]:
         """Get revenue grouped by time period."""
-        # Determine grouping
+        # Determine grouping - using SQLite-compatible functions
         if group_by == "day":
             date_format = func.date(TransactionHeaderModel.transaction_date)
         elif group_by == "week":
-            date_format = func.date_trunc('week', TransactionHeaderModel.transaction_date)
+            # SQLite: Get the Monday of the week using strftime
+            date_format = func.date(TransactionHeaderModel.transaction_date, 'weekday 1', '-6 days')
         elif group_by == "month":
-            date_format = func.date_trunc('month', TransactionHeaderModel.transaction_date)
+            # SQLite: Get the first day of the month using strftime
+            date_format = func.strftime('%Y-%m-01', TransactionHeaderModel.transaction_date)
         else:
             date_format = func.date(TransactionHeaderModel.transaction_date)
         

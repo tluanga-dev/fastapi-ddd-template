@@ -19,8 +19,8 @@ class StockLevelRepository(ABC):
         pass
     
     @abstractmethod
-    async def get_by_sku_location(self, sku_id: UUID, location_id: UUID) -> Optional[StockLevel]:
-        """Get stock level for a specific SKU at a location."""
+    async def get_by_item_location(self, item_id: UUID, location_id: UUID) -> Optional[StockLevel]:
+        """Get stock level for a specific Item at a location."""
         pass
     
     @abstractmethod
@@ -29,7 +29,7 @@ class StockLevelRepository(ABC):
         skip: int = 0,
         limit: int = 100,
         location_id: Optional[UUID] = None,
-        sku_id: Optional[UUID] = None,
+        item_id: Optional[UUID] = None,
         low_stock_only: bool = False,
         is_active: Optional[bool] = True
     ) -> Tuple[List[StockLevel], int]:
@@ -47,13 +47,13 @@ class StockLevelRepository(ABC):
         pass
     
     @abstractmethod
-    async def get_or_create(self, sku_id: UUID, location_id: UUID) -> StockLevel:
+    async def get_or_create(self, item_id: UUID, location_id: UUID) -> StockLevel:
         """Get existing stock level or create new one."""
         pass
     
     @abstractmethod
-    async def get_total_stock_by_sku(self, sku_id: UUID) -> dict:
-        """Get total stock quantities across all locations for a SKU."""
+    async def get_total_stock_by_item(self, item_id: UUID) -> dict:
+        """Get total stock quantities across all locations for an Item."""
         pass
     
     @abstractmethod
@@ -78,7 +78,7 @@ class StockLevelRepository(ABC):
     @abstractmethod
     async def check_availability(
         self,
-        sku_id: UUID,
+        item_id: UUID,
         quantity: int,
         location_id: Optional[UUID] = None
     ) -> Tuple[bool, int]:
@@ -93,7 +93,7 @@ class StockLevelRepository(ABC):
     @abstractmethod
     async def transfer_stock(
         self,
-        sku_id: UUID,
+        item_id: UUID,
         from_location_id: UUID,
         to_location_id: UUID,
         quantity: int,
