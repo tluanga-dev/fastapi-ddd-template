@@ -25,7 +25,7 @@ from ....domain.value_objects.transaction_type import (
     LineItemType,
 )
 from ....domain.value_objects.customer_type import CustomerType
-from ....domain.value_objects.item_type import InventoryStatus
+from ....domain.value_objects.item_type import InventoryStatus, ConditionGrade
 
 
 class RecordCompletedPurchaseUseCase:
@@ -319,7 +319,7 @@ class RecordCompletedPurchaseUseCase:
                     raise ValueError(f"Serial number {serial_number} already exists")
 
                 inventory_unit = InventoryUnit(
-                    inventory_id=self._generate_inventory_id(),
+                    inventory_code=self._generate_inventory_id(),
                     item_id=item.id,
                     serial_number=serial_number,
                     location_id=location_id,
@@ -328,7 +328,7 @@ class RecordCompletedPurchaseUseCase:
                         if item.is_saleable
                         else InventoryStatus.AVAILABLE_RENT
                     ),
-                    condition_grade="A",  # New items start with grade A
+                    condition_grade=ConditionGrade.A,  # New items start with grade A
                     purchase_date=purchase_date,
                     purchase_cost=unit_cost,
                     created_by=created_by,
