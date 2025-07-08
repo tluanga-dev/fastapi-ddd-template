@@ -193,61 +193,18 @@ class RecordCompletedPurchaseUseCase:
                 updated_by=created_by,
             )
 
-        # Apply purchase-level discount if provided
-        if discount_amount > 0:
-            discount_line = TransactionLine(
-                transaction_id=transaction.id,
-                line_number=line_number,
-                line_type=LineItemType.DISCOUNT,
-                description="Purchase discount",
-                quantity=Decimal("1"),
-                unit_price=-discount_amount,
-                created_by=created_by,
-            )
-            discount_line.calculate_line_total()
-            lines.append(discount_line)
-            line_number += 1
-
-        # Calculate purchase-level tax
-        purchase_level_tax_amount = Decimal("0.00")
+        # No separate purchase-level discount or tax lines needed
+        # All tax and discount information is now embedded in the product lines
         
-        # Calculate taxable amount after all discounts
-        total_discount = total_item_discount + discount_amount
-        taxable_amount = subtotal - total_discount
-        
-        # If tax_amount is provided, use it; otherwise calculate from tax_rate
-        if tax_amount is not None and tax_amount > 0:
-            purchase_level_tax_amount = tax_amount
-            tax_line = TransactionLine(
-                transaction_id=transaction.id,
-                line_number=line_number,
-                line_type=LineItemType.TAX,
-                description="Purchase tax",
-                quantity=Decimal("1"),
-                unit_price=purchase_level_tax_amount,
-                created_by=created_by,
-            )
-            tax_line.calculate_line_total()
-            lines.append(tax_line)
-        elif tax_rate > 0 and taxable_amount > 0:
-            purchase_level_tax_amount = taxable_amount * (tax_rate / 100)
-            tax_line = TransactionLine(
-                transaction_id=transaction.id,
-                line_number=line_number,
-                line_type=LineItemType.TAX,
-                description=f"Purchase tax ({tax_rate}%)",
-                quantity=Decimal("1"),
-                unit_price=purchase_level_tax_amount,
-                created_by=created_by,
-            )
-            tax_line.calculate_line_total()
-            lines.append(tax_line)
+        # Note: The tax_amount and discount_amount parameters from the frontend
+        # represent the sum of all item-level taxes and discounts, not additional
+        # purchase-level amounts. We use these for validation and header totals only.
 
         # Update transaction totals
         transaction.subtotal = subtotal
-        transaction.discount_amount = total_discount  # Total of item and purchase discounts
-        transaction.tax_amount = total_item_tax + purchase_level_tax_amount  # Total of item and purchase taxes
-        transaction.total_amount = subtotal - total_discount + transaction.tax_amount
+        transaction.discount_amount = total_item_discount  # Sum of all item discounts
+        transaction.tax_amount = total_item_tax  # Sum of all item taxes  
+        transaction.total_amount = subtotal - total_item_discount + total_item_tax
         transaction.paid_amount = transaction.total_amount  # Purchase is already paid
 
         # Save transaction
