@@ -15,7 +15,7 @@ from ....domain.repositories.transaction_line_repository import (
     TransactionLineRepository,
 )
 from ....domain.repositories.item_repository import ItemRepository
-from ....domain.repositories.customer_repository import CustomerRepository
+from ....domain.repositories.supplier_repository import SupplierRepository
 from ....domain.repositories.inventory_unit_repository import InventoryUnitRepository
 from ....domain.repositories.stock_level_repository import StockLevelRepository
 from ....domain.value_objects.transaction_type import (
@@ -24,7 +24,6 @@ from ....domain.value_objects.transaction_type import (
     PaymentStatus,
     LineItemType,
 )
-from ....domain.value_objects.customer_type import CustomerType
 from ....domain.value_objects.item_type import InventoryStatus, ConditionGrade
 
 
@@ -36,7 +35,7 @@ class RecordCompletedPurchaseUseCase:
         transaction_repository: TransactionHeaderRepository,
         line_repository: TransactionLineRepository,
         item_repository: ItemRepository,
-        customer_repository: CustomerRepository,
+        supplier_repository: SupplierRepository,
         inventory_repository: InventoryUnitRepository,
         stock_repository: StockLevelRepository,
     ):
@@ -44,7 +43,7 @@ class RecordCompletedPurchaseUseCase:
         self.transaction_repository = transaction_repository
         self.line_repository = line_repository
         self.item_repository = item_repository
-        self.customer_repository = customer_repository
+        self.supplier_repository = supplier_repository
         self.inventory_repository = inventory_repository
         self.stock_repository = stock_repository
 
@@ -63,15 +62,11 @@ class RecordCompletedPurchaseUseCase:
         created_by: Optional[str] = None,
     ) -> TransactionHeader:
         """Execute the use case to record a completed purchase transaction."""
-        # Validate supplier exists and is a business
-        supplier = await self.customer_repository.get_by_id(supplier_id)
+        # Validate supplier exists and is active
+        supplier = await self.supplier_repository.get_by_id(supplier_id)
         if not supplier:
             raise ValueError(f"Supplier with id {supplier_id} not found")
 
-        if supplier.customer_type != CustomerType.BUSINESS:
-            raise ValueError("Supplier must be a business customer")
-
-        # Check if supplier is active
         if not supplier.is_active:
             raise ValueError("Cannot record purchase for inactive supplier")
 

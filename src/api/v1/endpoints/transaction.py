@@ -42,6 +42,9 @@ from ....domain.value_objects.transaction_type import (
     TransactionType,
 )
 from ....domain.value_objects.customer_type import CustomerType
+from ....infrastructure.repositories.supplier_repository import (
+    SQLAlchemySupplierRepository,
+)
 from ....infrastructure.repositories.customer_repository import (
     SQLAlchemyCustomerRepository,
 )
@@ -874,13 +877,13 @@ async def record_completed_purchase(
     """Record a completed purchase transaction and create inventory records."""
     transaction_repo = SQLAlchemyTransactionHeaderRepository(db)
     line_repo = SQLAlchemyTransactionLineRepository(db)
-    customer_repo = SQLAlchemyCustomerRepository(db)
+    supplier_repo = SQLAlchemySupplierRepository(db)
     item_repo = ItemRepositoryImpl(db)
     inventory_repo = SQLAlchemyInventoryUnitRepository(db)
     stock_repo = SQLAlchemyStockLevelRepository(db)
 
     use_case = RecordCompletedPurchaseUseCase(
-        transaction_repo, line_repo, item_repo, customer_repo, inventory_repo, stock_repo
+        transaction_repo, line_repo, item_repo, supplier_repo, inventory_repo, stock_repo
     )
 
     try:
@@ -1068,7 +1071,7 @@ async def get_purchase_transaction(
     """Get purchase order by ID."""
     transaction_repo = SQLAlchemyTransactionHeaderRepository(db)
     line_repo = SQLAlchemyTransactionLineRepository(db)
-    customer_repo = SQLAlchemyCustomerRepository(db)
+    supplier_repo = SQLAlchemySupplierRepository(db)
 
     transaction = await transaction_repo.get_by_id(transaction_id)
     if not transaction:
@@ -1085,71 +1088,58 @@ async def get_purchase_transaction(
 
     response = TransactionHeaderResponse.model_validate(transaction)
 
-    # For purchase transactions, include supplier (customer) details
+    # For purchase transactions, include supplier details
+    # Note: customer_id field contains supplier_id for purchase transactions
     if transaction.customer_id:
-        supplier = await customer_repo.get_by_id(transaction.customer_id)
+        supplier = await supplier_repo.get_by_id(transaction.customer_id)
         if supplier:
             from ..schemas.transaction import SupplierSummary, SupplierContact, SupplierAddress
             
-            # Get the full customer model with contacts and addresses
-            from sqlalchemy import select
-            from ....infrastructure.models.customer_model import CustomerModel
-            from ....infrastructure.models.customer_contact_method_model import CustomerContactMethodModel
-            from ....infrastructure.models.customer_address_model import CustomerAddressModel
-            
-            # Get customer with related data
-            customer_query = select(CustomerModel).where(CustomerModel.id == transaction.customer_id)
-            customer_result = await db.execute(customer_query)
-            customer_model = customer_result.scalar_one_or_none()
-            
+            # Build supplier summary from supplier entity
             contacts = []
             addresses = []
-            primary_email = None
-            primary_phone = None
             
-            if customer_model:
-                # Process contact methods
-                for contact in customer_model.contact_methods:
-                    if contact.is_active:
-                        contacts.append(SupplierContact(
-                            contact_type=contact.contact_type,
-                            contact_value=contact.contact_value,
-                            contact_label=contact.contact_label,
-                            is_primary=contact.is_primary
-                        ))
-                        
-                        # Set primary contacts
-                        if contact.is_primary:
-                            if contact.contact_type == "EMAIL":
-                                primary_email = contact.contact_value
-                            elif contact.contact_type == "PHONE":
-                                primary_phone = contact.contact_value
-                
-                # Process addresses
-                for address in customer_model.addresses:
-                    if address.is_active:
-                        addresses.append(SupplierAddress(
-                            street=address.street,
-                            address_line2=address.address_line2,
-                            city=address.city,
-                            state=address.state,
-                            country=address.country,
-                            postal_code=address.postal_code
-                        ))
+            # Add primary contact if available
+            if supplier.email:
+                contacts.append(SupplierContact(
+                    contact_type="EMAIL",
+                    contact_value=supplier.email,
+                    contact_label="Primary",
+                    is_primary=True
+                ))
+            
+            if supplier.phone:
+                contacts.append(SupplierContact(
+                    contact_type="PHONE", 
+                    contact_value=supplier.phone,
+                    contact_label="Primary",
+                    is_primary=True
+                ))
+            
+            # Add address if available
+            if supplier.address:
+                addresses.append(SupplierAddress(
+                    street=supplier.address,
+                    address_line2=None,
+                    city=None,
+                    state=None,
+                    country=None,
+                    postal_code=None
+                ))
             
             response.supplier = SupplierSummary(
                 id=str(supplier.id),
-                company_name=supplier.business_name or "",
-                supplier_code=supplier.customer_code or "",
-                display_name=supplier.get_display_name(),
-                contact_person=f"{supplier.first_name or ''} {supplier.last_name or ''}".strip() if supplier.customer_type == CustomerType.BUSINESS else None,
-                supplier_type=supplier.customer_type.value if supplier.customer_type else "BUSINESS",
-                supplier_tier=supplier.customer_tier.value if supplier.customer_tier else "BRONZE",
+                company_name=supplier.company_name,
+                supplier_code=supplier.supplier_code,
+                display_name=supplier.company_name,
+                contact_person=supplier.contact_person,
+                supplier_type=supplier.supplier_type.value if supplier.supplier_type else "DISTRIBUTOR",
+                supplier_tier=supplier.supplier_tier.value if supplier.supplier_tier else "STANDARD",
                 is_active=supplier.is_active,
                 contacts=contacts,
                 addresses=addresses,
-                primary_email=primary_email,
-                primary_phone=primary_phone
+                primary_email=supplier.email,
+                primary_phone=supplier.phone
             )
 
     if include_lines:

@@ -35,7 +35,7 @@ class CompletedPurchaseRecord(BaseModel):
     """Schema for recording a completed purchase transaction."""
 
     supplier_id: UUID = Field(
-        ..., description="Supplier ID (customer with type=BUSINESS)"
+        ..., description="Supplier ID from suppliers table"
     )
     location_id: UUID = Field(
         ..., description="Location where items will be stored"
