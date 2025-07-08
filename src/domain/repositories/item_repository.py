@@ -53,3 +53,23 @@ class ItemRepository(BaseRepository[Item]):
     async def search_by_sku(self, sku_pattern: str, skip: int = 0, limit: int = 100) -> List[Item]:
         """Search items by SKU pattern."""
         pass
+    
+    @abstractmethod
+    async def get_rentable_items_with_search(
+        self, 
+        search: Optional[str] = None, 
+        category_id: Optional[UUID] = None, 
+        skip: int = 0, 
+        limit: int = 100
+    ) -> List[Item]:
+        """Get rentable items with optional search and category filter."""
+        pass
+    
+    @abstractmethod
+    async def count_rentable_items(
+        self, 
+        search: Optional[str] = None, 
+        category_id: Optional[UUID] = None
+    ) -> int:
+        """Count rentable items with optional search and category filter."""
+        pass

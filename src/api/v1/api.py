@@ -17,6 +17,7 @@ from src.api.v1.endpoints.rental_transaction import router as rental_transaction
 from src.api.v1.endpoints.rental_due_today import router as rental_due_today_router
 from src.api.v1.endpoints.unit_of_measurement_endpoints import router as unit_of_measurement_router
 from src.api.v1.endpoints.item_endpoints import router as items_router
+from src.api.v1.endpoints.rentable_items import router as rentable_items_router
 
 api_router = APIRouter()
 
@@ -37,3 +38,4 @@ api_router.include_router(rental_transaction_router, tags=["rental-transactions"
 api_router.include_router(rental_due_today_router, tags=["rentals-due-today"])
 api_router.include_router(unit_of_measurement_router, prefix="/units-of-measurement", tags=["units-of-measurement"])
 api_router.include_router(items_router, prefix="/items", tags=["items"])
+api_router.include_router(rentable_items_router, prefix="/rentable-items", tags=["rentable-items"])

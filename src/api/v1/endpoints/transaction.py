@@ -31,9 +31,6 @@ from ....application.use_cases.transaction.record_completed_sale_return_use_case
 from ....application.use_cases.transaction.record_completed_sale_use_case import (
     RecordCompletedSaleUseCase,
 )
-from ....application.use_cases.transaction.create_batch_purchase_use_case import (
-    CreateBatchPurchaseUseCase,
-)
 from ....domain.entities.transaction_header import TransactionHeader
 from ....domain.entities.transaction_line import TransactionLine
 from ....domain.value_objects.transaction_type import (
@@ -101,12 +98,6 @@ from ..schemas.transaction import (
     TransactionHeaderUpdate,
     TransactionLineResponse,
     TransactionListResponse,
-)
-from ..schemas.batch_purchase_schemas import (
-    BatchPurchaseRecord,
-    BatchPurchaseResponse,
-    BatchPurchaseValidationResponse,
-    BatchPurchaseErrorResponse,
 )
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
@@ -942,153 +933,6 @@ async def record_completed_purchase(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
         )
 
-
-# Batch Purchase Endpoints
-@router.post(
-    "/purchases/batch",
-    response_model=BatchPurchaseResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-async def create_batch_purchase(
-    batch_data: BatchPurchaseRecord, db: AsyncSession = Depends(get_db)
-) -> BatchPurchaseResponse:
-    """
-    Create a purchase transaction with embedded item master and SKU creation.
-    
-    This endpoint allows creating new item masters and SKUs within the same
-    transaction as the purchase, eliminating the need for separate API calls.
-    """
-    transaction_repo = SQLAlchemyTransactionHeaderRepository(db)
-    line_repo = SQLAlchemyTransactionLineRepository(db)
-    item_repo = ItemRepositoryImpl(db)
-    customer_repo = SQLAlchemyCustomerRepository(db)
-    inventory_repo = SQLAlchemyInventoryUnitRepository(db)
-    stock_repo = SQLAlchemyStockLevelRepository(db)
-
-    use_case = CreateBatchPurchaseUseCase(
-        transaction_repo, line_repo, item_repo, customer_repo, inventory_repo, stock_repo
-    )
-
-    try:
-        # Convert batch items to the expected format
-        items = []
-        for item in batch_data.items:
-            item_dict = {
-                "quantity": item.quantity,
-                "unit_cost": item.unit_cost,
-                "tax_rate": item.tax_rate,
-                "tax_amount": item.tax_amount,
-                "discount_amount": item.discount_amount,
-                "serial_numbers": item.serial_numbers,
-                "condition_notes": item.condition_notes,
-                "notes": item.notes,
-            }
-            
-            if item.item_id:
-                item_dict["item_id"] = item.item_id
-            else:
-                item_dict["new_item_master"] = item.new_item_master.model_dump()
-                item_dict["new_sku"] = item.new_sku.model_dump()
-            
-            items.append(item_dict)
-
-        result = await use_case.execute(
-            supplier_id=batch_data.supplier_id,
-            location_id=batch_data.location_id,
-            items=items,
-            purchase_date=batch_data.purchase_date,
-            tax_rate=batch_data.tax_rate,
-            tax_amount=batch_data.tax_amount,
-            discount_amount=batch_data.discount_amount,
-            invoice_number=batch_data.invoice_number,
-            invoice_date=batch_data.invoice_date,
-            notes=batch_data.notes,
-            auto_generate_codes=batch_data.auto_generate_codes,
-            validate_only=batch_data.validate_only
-        )
-
-        if batch_data.validate_only:
-            return BatchPurchaseValidationResponse(
-                is_valid=True,
-                validation_errors=[],
-                warnings=[],
-                items_to_create=result["preview_info"]["items_to_create"],
-                skus_to_create=result["preview_info"]["skus_to_create"],
-                existing_skus=result["preview_info"]["existing_skus"],
-                generated_item_codes=result["preview_info"]["generated_item_codes"],
-                generated_sku_codes=result["preview_info"]["generated_sku_codes"]
-            )
-
-        return BatchPurchaseResponse(
-            transaction_id=result["transaction_id"],
-            transaction_number=result["transaction_number"],
-            created_item_masters=result["created_item_masters"],
-            created_skus=result["created_skus"],
-            used_existing_skus=result["used_existing_skus"],
-            total_amount=result["total_amount"],
-            total_items=result["total_items"],
-            processing_time_ms=result["processing_time_ms"]
-        )
-        
-    except ValueError as e:
-        # Return structured error response for batch operations
-        error_message = str(e)
-        if "validation failed" in error_message.lower():
-            failed_at_step = "validation"
-        elif "item master" in error_message.lower():
-            failed_at_step = "item_creation"
-        elif "sku" in error_message.lower():
-            failed_at_step = "sku_creation"
-        else:
-            failed_at_step = "purchase_creation"
-        
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
-            detail={
-                "error_type": "BatchPurchaseValidationError",
-                "error_message": error_message,
-                "failed_at_step": failed_at_step,
-                "suggested_actions": [
-                    "Check that all required fields are provided",
-                    "Ensure SKU codes and item codes are unique",
-                    "Verify that category and brand IDs exist"
-                ]
-            }
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={
-                "error_type": "BatchPurchaseInternalError",
-                "error_message": str(e),
-                "failed_at_step": "unknown",
-                "suggested_actions": [
-                    "Retry the request",
-                    "Contact support if the issue persists"
-                ]
-            }
-        )
-
-
-@router.post(
-    "/purchases/batch/validate",
-    response_model=BatchPurchaseValidationResponse,
-    status_code=status.HTTP_200_OK,
-)
-async def validate_batch_purchase(
-    batch_data: BatchPurchaseRecord, db: AsyncSession = Depends(get_db)
-) -> BatchPurchaseValidationResponse:
-    """
-    Validate a batch purchase request without creating any records.
-    
-    This endpoint allows frontend applications to validate complex purchase
-    requests and preview what would be created before submission.
-    """
-    # Force validation mode
-    batch_data.validate_only = True
-    
-    # Use the same endpoint logic but only for validation
-    return await create_batch_purchase(batch_data, db)
 
 
 # Legacy endpoint for backward compatibility

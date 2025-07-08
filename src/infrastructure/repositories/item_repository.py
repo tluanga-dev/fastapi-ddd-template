@@ -1,7 +1,7 @@
 from typing import List, Optional
 from uuid import UUID
 from decimal import Decimal
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -197,3 +197,64 @@ class ItemRepositoryImpl(SQLAlchemyRepository[Item, ItemModel], ItemRepository):
         
         result = await self.session.execute(query)
         return result.scalars().all()
+    
+    async def get_rentable_items_with_search(
+        self, 
+        search: Optional[str] = None, 
+        category_id: Optional[UUID] = None, 
+        skip: int = 0, 
+        limit: int = 100
+    ) -> List[Item]:
+        """Get rentable items with optional search and category filter."""
+        query = select(self.model).filter(
+            self.model.is_rentable == True,
+            self.model.is_active == True
+        )
+        
+        # Apply search filter if provided
+        if search:
+            search_pattern = f"%{search.lower()}%"
+            query = query.filter(
+                or_(
+                    func.lower(self.model.item_name).like(search_pattern),
+                    func.lower(self.model.sku).like(search_pattern)
+                )
+            )
+        
+        # Apply category filter if provided
+        if category_id:
+            query = query.filter(self.model.category_id == category_id)
+        
+        query = query.offset(skip).limit(limit)
+        
+        result = await self.session.execute(query)
+        models = result.scalars().all()
+        return [self._to_entity(model) for model in models]
+    
+    async def count_rentable_items(
+        self, 
+        search: Optional[str] = None, 
+        category_id: Optional[UUID] = None
+    ) -> int:
+        """Count rentable items with optional search and category filter."""
+        query = select(func.count(self.model.id)).filter(
+            self.model.is_rentable == True,
+            self.model.is_active == True
+        )
+        
+        # Apply search filter if provided
+        if search:
+            search_pattern = f"%{search.lower()}%"
+            query = query.filter(
+                or_(
+                    func.lower(self.model.item_name).like(search_pattern),
+                    func.lower(self.model.sku).like(search_pattern)
+                )
+            )
+        
+        # Apply category filter if provided
+        if category_id:
+            query = query.filter(self.model.category_id == category_id)
+        
+        result = await self.session.execute(query)
+        return result.scalar() or 0
