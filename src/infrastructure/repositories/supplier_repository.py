@@ -1,4 +1,5 @@
 from typing import List, Optional, Tuple
+from datetime import date
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, text, desc
@@ -25,13 +26,50 @@ class SQLAlchemySupplierRepository(ISupplierRepository):
         return model.to_entity()
 
     async def get_by_id(self, supplier_id: UUID) -> Optional[Supplier]:
-        """Get supplier by ID."""
+        """Get supplier by ID with real-time purchase transaction metrics."""
+        from ..models.transaction_header_model import TransactionHeaderModel
+        from ...domain.value_objects.transaction_type import TransactionType
+        
         stmt = select(SupplierModel).where(
             and_(SupplierModel.id == supplier_id, SupplierModel.is_active == True)
         )
         result = await self.session.execute(stmt)
         model = result.scalar_one_or_none()
-        return model.to_entity() if model else None
+        
+        if not model:
+            return None
+            
+        # Get real purchase transaction metrics for this supplier
+        # Note: In current architecture, suppliers are stored as customer_id in PURCHASE transactions
+        purchase_metrics = await self.session.execute(
+            select(
+                func.count(TransactionHeaderModel.id).label('total_orders'),
+                func.coalesce(func.sum(TransactionHeaderModel.total_amount), 0).label('total_spend'),
+                func.max(TransactionHeaderModel.transaction_date).label('last_order_date')
+            )
+            .where(
+                and_(
+                    TransactionHeaderModel.customer_id == supplier_id,
+                    TransactionHeaderModel.transaction_type == TransactionType.PURCHASE,
+                    TransactionHeaderModel.is_active == True
+                )
+            )
+        )
+        
+        metrics = purchase_metrics.fetchone()
+        total_orders = int(metrics.total_orders or 0)
+        total_spend = float(metrics.total_spend or 0)
+        last_order_date = metrics.last_order_date
+        
+        # Create entity with updated metrics
+        supplier = model.to_entity()
+        
+        # Update the supplier with real transaction data
+        supplier._total_orders = total_orders
+        supplier._total_spend = total_spend
+        supplier._last_order_date = last_order_date
+        
+        return supplier
 
     async def get_by_code(self, supplier_code: str) -> Optional[Supplier]:
         """Get supplier by supplier code."""
@@ -209,24 +247,43 @@ class SQLAlchemySupplierRepository(ISupplierRepository):
         count = result.scalar()
         return count > 0
 
-    async def get_supplier_analytics(self) -> dict:
+    async def get_supplier_analytics(self, start_date: Optional[date] = None, end_date: Optional[date] = None) -> dict:
         """Get supplier analytics data."""
+        from ..models.transaction_header_model import TransactionHeaderModel
+        from ...domain.value_objects.transaction_type import TransactionType
+        
         # Total suppliers
         total_result = await self.session.execute(
             select(func.count(SupplierModel.id)).where(SupplierModel.is_active == True)
         )
         total_suppliers = total_result.scalar() or 0
 
-        # Active suppliers (those with orders in last 6 months)
-        active_result = await self.session.execute(
-            select(func.count(SupplierModel.id)).where(
-                and_(
-                    SupplierModel.is_active == True,
-                    SupplierModel.last_order_date >= func.now() - text("INTERVAL '6 months'")
-                )
+        # Active suppliers - those who appear as customer_id in PURCHASE transactions
+        # (Note: In current architecture, purchase transactions use customer_id to store supplier_id)
+        purchase_conditions = [
+            TransactionHeaderModel.transaction_type == TransactionType.PURCHASE,
+            TransactionHeaderModel.is_active == True
+        ]
+        
+        if start_date and end_date:
+            from datetime import datetime
+            start_dt = datetime.combine(start_date, datetime.min.time())
+            end_dt = datetime.combine(end_date, datetime.max.time())
+            purchase_conditions.extend([
+                TransactionHeaderModel.transaction_date >= start_dt,
+                TransactionHeaderModel.transaction_date <= end_dt
+            ])
+        else:
+            # Default: last 6 months
+            purchase_conditions.append(
+                TransactionHeaderModel.transaction_date >= text("date('now', '-6 months')")
             )
+        
+        active_suppliers_with_purchases = await self.session.execute(
+            select(func.count(func.distinct(TransactionHeaderModel.customer_id)))
+            .where(and_(*purchase_conditions))
         )
-        active_suppliers = active_result.scalar() or 0
+        active_suppliers = active_suppliers_with_purchases.scalar() or 0
 
         # Supplier type distribution
         type_result = await self.session.execute(
@@ -261,16 +318,30 @@ class SQLAlchemySupplierRepository(ISupplierRepository):
         for terms, count in terms_result.fetchall():
             payment_terms_distribution[terms.lower()] = count
 
-        # Top suppliers by spend
-        top_suppliers_result = await self.session.execute(
-            select(SupplierModel)
+        # Top suppliers by actual purchase transaction spend
+        # Join suppliers with their purchase transactions to get real spending data
+        purchase_spend_query = await self.session.execute(
+            select(
+                SupplierModel,
+                func.coalesce(func.sum(TransactionHeaderModel.total_amount), 0).label('actual_spend'),
+                func.count(TransactionHeaderModel.id).label('total_orders')
+            )
+            .outerjoin(
+                TransactionHeaderModel,
+                and_(
+                    SupplierModel.id == TransactionHeaderModel.customer_id,
+                    TransactionHeaderModel.transaction_type == TransactionType.PURCHASE,
+                    TransactionHeaderModel.is_active == True
+                )
+            )
             .where(SupplierModel.is_active == True)
-            .order_by(desc(SupplierModel.total_spend))
+            .group_by(SupplierModel.id)
+            .order_by(desc('actual_spend'))
             .limit(10)
         )
         
         top_suppliers = []
-        for model in top_suppliers_result.scalars().all():
+        for model, actual_spend, total_orders in purchase_spend_query.fetchall():
             supplier = model.to_entity()
             top_suppliers.append({
                 "supplier": {
@@ -279,43 +350,101 @@ class SQLAlchemySupplierRepository(ISupplierRepository):
                     "company_name": supplier.company_name,
                     "supplier_type": supplier.supplier_type.value,
                     "supplier_tier": supplier.supplier_tier.value,
-                    "total_spend": float(supplier.total_spend),
-                    "total_orders": supplier.total_orders,
+                    "total_spend": float(actual_spend or 0),
+                    "total_orders": int(total_orders or 0),
                     "quality_rating": float(supplier.quality_rating)
                 },
-                "total_spend": float(supplier.total_spend)
+                "total_spend": float(actual_spend or 0)
             })
 
-        # Monthly new suppliers (last 12 months) - SQLite compatible
+        # Monthly new suppliers - filter by date range if provided
         monthly_new = []
-        for i in range(12):
-            # SQLite: Get first day of month i months ago
-            month_start = text(f"date('now', '-{i} months', 'start of month')")
-            month_end = text(f"date('now', '-{i} months', 'start of month', '+1 month')")
+        
+        # Determine date range for monthly data
+        if start_date and end_date:
+            # Custom date range - group by month within the range
+            from datetime import datetime
+            start_dt = datetime.combine(start_date, datetime.min.time())
+            end_dt = datetime.combine(end_date, datetime.max.time())
             
+            # For custom ranges, we'll still show monthly breakdown
             month_result = await self.session.execute(
-                select(func.count(SupplierModel.id))
+                select(
+                    func.strftime('%Y-%m', SupplierModel.created_at).label('month'),
+                    func.count(SupplierModel.id).label('count')
+                )
                 .where(
                     and_(
-                        SupplierModel.created_at >= month_start,
-                        SupplierModel.created_at < month_end
+                        SupplierModel.created_at >= start_dt,
+                        SupplierModel.created_at <= end_dt
                     )
                 )
+                .group_by(func.strftime('%Y-%m', SupplierModel.created_at))
+                .order_by(func.strftime('%Y-%m', SupplierModel.created_at))
             )
-            count = month_result.scalar() or 0
             
-            # Get month string
-            month_str_result = await self.session.execute(
-                select(func.to_char(month_start, 'YYYY-MM'))
-            )
-            month_str = month_str_result.scalar()
-            
-            monthly_new.append({
-                "month": month_str,
-                "count": count
-            })
+            for month_str, count in month_result.fetchall():
+                monthly_new.append({
+                    "month": month_str,
+                    "count": count
+                })
+        else:
+            # Default: last 12 months - SQLite compatible
+            for i in range(12):
+                # SQLite: Get first day of month i months ago
+                month_start = text(f"date('now', '-{i} months', 'start of month')")
+                month_end = text(f"date('now', '-{i} months', 'start of month', '+1 month')")
+                
+                month_result = await self.session.execute(
+                    select(func.count(SupplierModel.id))
+                    .where(
+                        and_(
+                            SupplierModel.created_at >= month_start,
+                            SupplierModel.created_at < month_end
+                        )
+                    )
+                )
+                count = month_result.scalar() or 0
+                
+                # Get month string
+                month_str_result = await self.session.execute(
+                    select(func.strftime('%Y-%m', month_start))
+                )
+                month_str = month_str_result.scalar()
+                
+                monthly_new.append({
+                    "month": month_str,
+                    "count": count
+                })
 
-        monthly_new.reverse()  # Show oldest first
+            monthly_new.reverse()  # Show oldest first
+
+        # Calculate total spend from all purchase transactions
+        total_spend_result = await self.session.execute(
+            select(func.coalesce(func.sum(TransactionHeaderModel.total_amount), 0))
+            .where(
+                and_(
+                    TransactionHeaderModel.transaction_type == TransactionType.PURCHASE,
+                    TransactionHeaderModel.is_active == True
+                )
+            )
+        )
+        total_spend = float(total_spend_result.scalar() or 0)
+        
+        # Calculate average quality rating from suppliers with purchase transactions
+        avg_quality_result = await self.session.execute(
+            select(func.avg(SupplierModel.quality_rating))
+            .join(
+                TransactionHeaderModel,
+                and_(
+                    SupplierModel.id == TransactionHeaderModel.customer_id,
+                    TransactionHeaderModel.transaction_type == TransactionType.PURCHASE,
+                    TransactionHeaderModel.is_active == True
+                )
+            )
+            .where(SupplierModel.is_active == True)
+        )
+        average_quality_rating = float(avg_quality_result.scalar() or 0)
 
         return {
             "total_suppliers": total_suppliers,
@@ -325,9 +454,6 @@ class SQLAlchemySupplierRepository(ISupplierRepository):
             "payment_terms_distribution": payment_terms_distribution,
             "monthly_new_suppliers": monthly_new,
             "top_suppliers_by_spend": top_suppliers,
-            "total_spend": float(sum(s["total_spend"] for s in top_suppliers)),
-            "average_quality_rating": float(
-                sum(s["supplier"]["quality_rating"] for s in top_suppliers) / 
-                len(top_suppliers) if top_suppliers else 0
-            )
+            "total_spend": total_spend,
+            "average_quality_rating": average_quality_rating
         }

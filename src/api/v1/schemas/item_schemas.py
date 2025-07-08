@@ -66,6 +66,13 @@ class ItemBase(BaseModel):
         if self.max_rental_days is not None and self.max_rental_days < self.min_rental_days:
             raise ValueError("Maximum rental days must be greater than or equal to minimum rental days")
         return self
+    
+    @model_validator(mode='after')
+    def validate_availability_exclusivity(self) -> 'ItemBase':
+        """Validate that item cannot be both rentable and saleable."""
+        if self.is_rentable and self.is_saleable:
+            raise ValueError("Item cannot be available for both rent and sale simultaneously")
+        return self
 
 
 class ItemCreate(ItemBase):
@@ -81,6 +88,8 @@ class ItemUpdate(BaseModel):
     model_number: Optional[str] = Field(None, max_length=100)
     weight: Optional[Decimal] = Field(None, ge=0, decimal_places=3)
     dimensions: Optional[Dict[str, Decimal]] = Field(None)
+    is_rentable: Optional[bool] = Field(None, description="Whether item can be rented")
+    is_saleable: Optional[bool] = Field(None, description="Whether item can be sold")
     
     @field_validator('item_name')
     @classmethod
@@ -106,6 +115,14 @@ class ItemUpdate(BaseModel):
             
             return v.upper()
         return v
+    
+    @model_validator(mode='after')
+    def validate_availability_exclusivity(self) -> 'ItemUpdate':
+        """Validate that item cannot be both rentable and saleable."""
+        if (self.is_rentable is not None and self.is_saleable is not None and 
+            self.is_rentable and self.is_saleable):
+            raise ValueError("Item cannot be available for both rent and sale simultaneously")
+        return self
 
 
 class ItemPricingUpdate(BaseModel):

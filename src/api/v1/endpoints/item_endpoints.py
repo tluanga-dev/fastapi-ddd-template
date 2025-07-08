@@ -223,6 +223,7 @@ async def update_item(
     use_case = UpdateItemUseCase(repository)
     
     try:
+        # Start with basic info update
         item = await use_case.execute(
             item_id=item_id,
             item_name=item_data.item_name,
@@ -233,6 +234,23 @@ async def update_item(
             dimensions=item_data.dimensions,
             updated_by=current_user_id
         )
+        
+        # Update rental settings if is_rentable is provided
+        if item_data.is_rentable is not None:
+            item = await use_case.execute_rental_settings(
+                item_id=item_id,
+                is_rentable=item_data.is_rentable,
+                updated_by=current_user_id
+            )
+        
+        # Update sale settings if is_saleable is provided
+        if item_data.is_saleable is not None:
+            item = await use_case.execute_sale_settings(
+                item_id=item_id,
+                is_saleable=item_data.is_saleable,
+                updated_by=current_user_id
+            )
+        
         return ItemResponse.model_validate(item)
     except ValueError as e:
         if "not found" in str(e):

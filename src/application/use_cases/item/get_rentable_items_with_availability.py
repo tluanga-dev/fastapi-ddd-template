@@ -112,14 +112,14 @@ class GetRentableItemsWithAvailabilityUseCase:
                 'base_price': float(item.rental_base_price) if item.rental_base_price else None,
                 'min_rental_days': item.min_rental_days,
                 'max_rental_days': item.max_rental_days,
-                'rental_period': item.rental_period.value if item.rental_period else None
+                'rental_period': str(item.rental_period) if item.rental_period else None
             },
             'availability': availability,
             'item_details': {
                 'model_number': item.model_number,
                 'barcode': item.barcode,
                 'weight': float(item.weight) if item.weight else None,
-                'dimensions': item.dimensions,
+                'dimensions': str(item.dimensions) if item.dimensions else None,
                 'is_serialized': item.is_serialized
             }
         }
