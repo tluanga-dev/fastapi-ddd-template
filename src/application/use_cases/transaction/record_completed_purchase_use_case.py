@@ -127,10 +127,21 @@ class RecordCompletedPurchaseUseCase:
             if not item_obj.is_active:
                 raise ValueError(f"Item {item_obj.item_id or item_obj.id} is not active")
 
-            # Create main product line
+            # Create main product line with tax and discount information
             description = f"{item_obj.item_id or item_obj.id} - {item_obj.item_name}"
             if item_notes:
                 description += f" ({item_notes})"
+
+            # Calculate discount percentage if we have both amount and base price
+            discount_percentage = Decimal("0")
+            if item_discount_amount > 0 and unit_cost > 0:
+                discount_percentage = (item_discount_amount / (quantity * unit_cost)) * 100
+
+            # Calculate tax amount if not provided but tax rate is given
+            final_tax_amount = item_tax_amount
+            if final_tax_amount == 0 and item_tax_rate > 0:
+                taxable_amount = (quantity * unit_cost) - item_discount_amount
+                final_tax_amount = taxable_amount * (item_tax_rate / 100)
 
             line = TransactionLine(
                 transaction_id=transaction.id,
@@ -140,55 +151,27 @@ class RecordCompletedPurchaseUseCase:
                 description=description,
                 quantity=quantity,
                 unit_price=unit_cost,  # This is the purchase cost
-                discount_percentage=Decimal("0"),
+                discount_percentage=discount_percentage,
+                discount_amount=item_discount_amount,
+                tax_rate=item_tax_rate,
+                tax_amount=final_tax_amount,
                 created_by=created_by,
             )
 
-            # Calculate line total
+            # Calculate line total using the built-in method
             line.calculate_line_total()
-            item_subtotal = line.line_total
+            item_subtotal = (quantity * unit_cost)  # Base subtotal before tax/discount
             subtotal += item_subtotal
 
             lines.append(line)
             line_number += 1
 
-            # Add item-level discount if provided
-            if item_discount_amount > 0:
-                discount_line = TransactionLine(
-                    transaction_id=transaction.id,
-                    line_number=line_number,
-                    line_type=LineItemType.DISCOUNT,
-                    description=f"Item discount - {item_obj.item_id or item_obj.id}",
-                    quantity=Decimal("1"),
-                    unit_price=-item_discount_amount,
-                    created_by=created_by,
-                )
-                discount_line.calculate_line_total()
-                lines.append(discount_line)
-                line_number += 1
-                total_item_discount += item_discount_amount
+            # Track totals for purchase-level calculations
+            total_item_discount += item_discount_amount
+            total_item_tax += final_tax_amount
 
-            # Add item-level tax if provided
-            if item_tax_rate > 0 or item_tax_amount > 0:
-                # Calculate tax amount if not provided
-                if item_tax_amount == 0 and item_tax_rate > 0:
-                    taxable_amount = item_subtotal - item_discount_amount
-                    item_tax_amount = taxable_amount * (item_tax_rate / 100)
-                
-                if item_tax_amount > 0:
-                    tax_line = TransactionLine(
-                        transaction_id=transaction.id,
-                        line_number=line_number,
-                        line_type=LineItemType.TAX,
-                        description=f"Item tax - {item_obj.item_id or item_obj.id}" + (f" ({item_tax_rate}%)" if item_tax_rate > 0 else ""),
-                        quantity=Decimal("1"),
-                        unit_price=item_tax_amount,
-                        created_by=created_by,
-                    )
-                    tax_line.calculate_line_total()
-                    lines.append(tax_line)
-                    line_number += 1
-                    total_item_tax += item_tax_amount
+            # Item-level tax and discount are now included in the product line above
+            # No separate lines needed for item-level adjustments
 
             # Create inventory records immediately
             await self._create_inventory_units(
